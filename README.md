@@ -53,10 +53,16 @@ GPS ground speed is separate from measured pitot airspeed. Missing or stale read
 Simulator coverage includes X20RS on ETHOS **1.6.6**, **26.1.2** and **26.2.0-RC2**; physical-radio feedback covers **26.1.2**.
 RC coverage is exploratory. Check the actual sources, units and behaviour on your radio/model combination.
 
-## Deck family and license
+## Deck family
 
-[VoltDeck](https://github.com/bliatun-code/VoltDeck) covers electric model dashboards;
-[GasDeck](https://github.com/bliatun-code/GasDeck) covers fuel and receiver instrumentation.
-Each project has its own repository and releases.
+| App | Best suited to | Main instruments |
+| --- | --- | --- |
+| [VoltDeck](https://github.com/bliatun-code/VoltDeck) | Electric powered models | Flight-pack capacity, current, electrical power and motor telemetry. |
+| [GasDeck](https://github.com/bliatun-code/GasDeck) | Gasoline powered models | Receiver batteries, engine RPM, temperatures and fuel. |
+| [SoarDeck](https://github.com/bliatun-code/SoarDeck) | Sailplanes and motor gliders | Altitude, vario, history and motor-battery capacity when applicable. |
+
+Each project has its own repository, illustrated guides and releases.
+
+## License
 
 [MIT license](LICENSE) · [Artwork and trademark notices](NOTICE.md)
