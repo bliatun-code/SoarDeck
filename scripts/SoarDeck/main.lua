@@ -2,7 +2,7 @@
 -- Copyright (c) 2026 bliatun-code and SoarDeck contributors.
 -- SoarDeck: sailplane instrumentation for FrSky ETHOS.
 -- Generated standalone main.lua has no runtime module dependencies.
-local VERSION = "2026.10-v1"
+local VERSION = "2026.10-v2"
 local Soar = (function()
     local M = {}
     function M.finite(n) return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
@@ -93,7 +93,7 @@ local SoarBattery = (function()
         {full = 4.20, empty = 3.00, curve = OCV420},
         {full = 3.65, empty = 2.80},
     }
-    local CONFIG_KEYS = {"chemistry", "cellCount", "capacityMah", "batteryMethod", "endDelay",
+    local CONFIG_KEYS = {"chemistry", "cellCount", "capacityMah", "batteryMethod", "endDelay", "idleCurrentFloor",
         "modelKey", "sessionKey", "sourceKey", "voltageSource", "currentSource",
         "consumptionSource", "percentSource", "voltageConfigured"}
 
@@ -127,7 +127,10 @@ local SoarBattery = (function()
         s.qualified, s.requiresAcceptance = nil, s.uncertain == true
         s.epoch = (s.epoch or 0) + 1
     end
-    local function limit(cfg) return math.min(1.5, 3 * cfg.capacityMah / 20000) end
+    local function limit(cfg)
+        local floor = finite(cfg.idleCurrentFloor) and clamp(cfg.idleCurrentFloor, 0.3, 1.5) or 0.3
+        return math.min(1.5, math.max(floor, 3 * cfg.capacityMah / 20000))
+    end
     local function exceeded(cfg, current) return current > limit(cfg) + 0.000001 end
     local function reference(chemistry, mv)
         local curve = chemistry.curve
@@ -2031,7 +2034,7 @@ local DEFAULTS = {
     {"damping",1.5,0,5},{"avgSeconds",20,1,60},{"historyKind",1,1,2},
     {"historySeconds",120,30,300},{"freshSeconds",3,1,10},
     {"chemistry",1,1,4},{"cellCount",6,1,16},{"capacityMah",3300,100,100000},
-    {"batteryMethod",1,1,3},{"endDelay",10,3,120},
+    {"batteryMethod",1,1,3},{"endDelay",10,3,120},{"idleCurrentFloor",0.3,0.3,1.5},
     {"motorThreshold",0,-2048,2048},{"motorCurrent",2,0.1,100},
     {"heightAlarm",false},{"heightLimit",120,10,10000},{"batteryAlarm",false},
     {"batteryReserve",30,1,90},{"alertInterval",15,5,600},
@@ -2091,6 +2094,9 @@ local function read(w)
     if not Soar.valid(w) then return end
     local schema=Soar.call(storage.read,"schema")
     if schema~=nil and schema~=1 then w.configError="Unsupported settings version";w.readOnly=true;return end
+    -- Schema 1 uses named keys. Its additive extension stays readable by v1;
+    -- an old model without this key explicitly receives the new default.
+    w.cfg.idleCurrentFloor=0.3
     for _,d in ipairs(DEFAULTS) do local v=Soar.call(storage.read,d[1]);if v~=nil then w.cfg[d[1]]=v end end
     normalise(w.cfg)
     for _,d in ipairs(SOURCE_DEFS) do local v=Soar.call(storage.read,d[1]);if v~=nil then w.sources[d[1]]=Soar.restore(v) end end
@@ -2446,6 +2452,87 @@ local function alarms(w,now)
         end
     end
 end
+-- A display gate only: all polling, battery decisions, timers and alerts keep
+-- running in unsupported widget areas. LCD metadata belongs to this instance,
+-- and failed lookups retry at most once per second without requesting focus.
+local function fullScreen(w,now)
+    local state=w.screenState
+    if not state then state={};w.screenState=state end
+    if not state.lcdWidth and (not state.retryAt or now< (state.lastClock or now) or now>=state.retryAt) then
+        state.retryAt=now+1
+        local version=Soar.call(system.getVersion)
+        if type(version)=="table" and Soar.finite(version.lcdWidth) and Soar.finite(version.lcdHeight)
+            and version.lcdWidth>0 and version.lcdHeight>0 then
+            state.lcdWidth,state.lcdHeight=version.lcdWidth,version.lcdHeight
+        end
+    end
+    state.lastClock=now
+    local width,height=Soar.call(lcd.getWindowSize)
+    local valid=Soar.finite(width) and Soar.finite(height) and width>=1 and height>=1
+    local mode=not state.lcdWidth and "unavailable"
+        or (not valid or width~=state.lcdWidth or height~=state.lcdHeight) and "split" or "full"
+    if mode~="full" and state.state~=mode then
+        -- Discard the entire published frame before a notice can replace it.
+        -- The renderer owns these roots; telemetry/history/session are separate.
+        SoarRender.destroy(w)
+    elseif mode=="full" and state.state~="full" then
+        w.refresh=true
+    end
+    state.state=mode
+    return mode=="full",valid and width or nil,valid and height or nil,mode
+end
+local function screenNotice(w,width,height,mode)
+    if not width or not height then return end
+    local function rgb(r,g,b) return Soar.call(lcd.RGB,r,g,b) or r*65536+g*256+b end
+    local light=w.cfg.style==4
+    Soar.call(lcd.color,light and rgb(246,244,236) or rgb(0,0,0))
+    Soar.call(lcd.drawFilledRectangle,0,0,width,height)
+    local padding=math.min(12,math.floor(width/16),math.floor(height/12))
+    local availableWidth,availableHeight=width-2*padding,height-2*padding
+    if availableWidth<1 or availableHeight<1 then return end
+    local rows={"SoarDeck",mode=="unavailable" and "Screen size unavailable" or "Full screen required",
+        mode=="unavailable" and "Retrying automatically" or "Use a full-screen widget area"}
+    local fonts={FONT_M or FONT_STD or FONT_S or 0,FONT_S or FONT_STD or FONT_M or 0,FONT_XS or FONT_S or FONT_STD or 0}
+    local minimum=math.huge
+    for _,font in ipairs(fonts) do
+        Soar.call(lcd.font,font)
+        local _,h=Soar.call(lcd.getTextSize,"A")
+        if Soar.finite(h) and h>0 then minimum=math.min(minimum,h) end
+    end
+    local count=math.min(3,math.floor((availableHeight+4)/(minimum+4)))
+    if count<1 then return end
+    if count==1 then rows={rows[2]} elseif count==2 then rows={rows[1],rows[2]} end
+    local rowHeight=(availableHeight-(count-1)*4)/count
+    for index=1,count do
+        local text,selected,tw,th=rows[index]
+        for _,font in ipairs(fonts) do
+            Soar.call(lcd.font,font)
+            local a,b=Soar.call(lcd.getTextSize,text)
+            if Soar.finite(a) and Soar.finite(b) and a>=0 and b>0 and a<=availableWidth and b<=rowHeight then
+                selected,tw,th=font,a,b;break
+            end
+        end
+        if not selected then
+            local font=fonts[#fonts]
+            Soar.call(lcd.font,font)
+            local clipped=text
+            while #clipped>0 do
+                local fitted=clipped==text and clipped or clipped.."..."
+                local a,b=Soar.call(lcd.getTextSize,fitted)
+                if Soar.finite(a) and Soar.finite(b) and a>=0 and b>0 and a<=availableWidth and b<=rowHeight then
+                    text,selected,tw,th=fitted,font,a,b;break
+                end
+                clipped=clipped:sub(1,-2)
+            end
+        end
+        if selected then
+            Soar.call(lcd.font,selected)
+            Soar.call(lcd.color,light and rgb(19,30,26) or rgb(244,247,251))
+            Soar.call(lcd.drawText,math.floor((width-tw)/2),
+                math.floor(padding+(index-1)*(rowHeight+4)+(rowHeight-th)/2),text,LEFT or 0)
+        end
+    end
+end
 local function wakeup(w)
     if not Soar.valid(w) then return end
     local now=Soar.now()
@@ -2454,7 +2541,8 @@ local function wakeup(w)
     if w.cfg.preview then preview(w,now) else poll(w,now) end
     if not Soar.valid(w) then return end
     updateImage(w,now);alarms(w,now)
-    if type(SoarRender.prepare)=="function" then SoarRender.prepare(w) end
+    local supported,width,height=fullScreen(w,now)
+    if supported and type(SoarRender.prepare)=="function" then SoarRender.prepare(w,width,height) end
     if w.actionProblem then local problem=w.actionProblem;w.actionProblem=nil;showMessage(problem) end
     local visible=Soar.call(lcd.isVisible)
     if visible~=false and (not w.lastRedraw or now<w.lastRedraw or now-w.lastRedraw>=0.2 or w.refresh) then
@@ -2463,7 +2551,8 @@ local function wakeup(w)
 end
 local function paint(w)
     if not Soar.valid(w) then return end
-    SoarRender.paint(w)
+    local supported,width,height,mode=fullScreen(w,Soar.now())
+    if supported then SoarRender.paint(w) else screenNotice(w,width,height,mode) end
 end
 local function configure(w)
     if not Soar.valid(w) then return end
@@ -2558,6 +2647,8 @@ local function configure(w)
     source("voltageSource","Pack voltage",nil,motor)
     source("currentSource","Current",nil,motor)
     source("consumptionSource","Consumed mAh",nil,function() return motor() and w.cfg.batteryMethod==1 end)
+    number("Idle current floor","idleCurrentFloor",0.3,1.5,"A",0.1,nil,function() return motor() and w.cfg.batteryMethod==1 end)
+    note("Battery check: capacity may allow a higher idle current.")
     source("percentSource","Percent source",nil,function() return motor() and w.cfg.batteryMethod==2 end)
     source("cellMinSource","Lowest cell voltage",nil,motor)
     button("Battery counter","Accept...",function() if motor() then acceptBattery(w) end end)

@@ -1,6 +1,6 @@
 # Configure SoarDeck
 
-**SoarDeck 2026.10-v1** · [Illustrated walkthrough: all 16 layouts](Walkthrough.md)
+**SoarDeck 2026.10-v2** · [Illustrated walkthrough: all 16 layouts](Walkthrough.md)
 
 [Norsk](Konfigurasjon-norsk.md) · [Overview and installation](../README.md)
 
@@ -21,6 +21,14 @@ A 320 × 180 picture fits comfortably. An 800 × 480 picture exceeds the pixel l
 The aspect ratio is retained. Hidden is the correct choice for an instrument-only display.
 For **Image file**, copy the picture to `/bitmaps/models/` on the radio, then select it in the
 **Image file** field. Model pictures are separate from the widget ZIP.
+
+## Use a full-screen widget area
+
+The widget area must match the radio's actual LCD width and height. This is not an 800 × 480 product
+limit; a smaller matching LCD/window pair is also full screen. A split area shows **Full screen required**
+and clears the old instrument view. Restore a full-screen area to resume the instruments automatically.
+If the LCD dimensions are unavailable or invalid, **Screen size unavailable** is shown and the app retries
+at a bounded rate. Telemetry processing, battery qualification, timers, history and alerts continue.
 
 ## Select altitude and VSpeed
 
@@ -114,8 +122,14 @@ does not identify the weakest cell. A current sensor needs an appropriate consum
 ETHOS; the app does not invent consumption from motor time or integrate a missing counter.
 
 For Consumed mAh, each new battery needs **10 continuous seconds** with pack voltage spanning at
-most **0.20 V for the whole pack**, at current no higher than `min(1.5 A, 3 × capacity / 20000)`.
-For 3300 mAh this is 0.495 A. Servo load can interrupt this check even with the motor stopped.
+most **0.20 V for the whole pack**, at current no higher than
+`min(1.5 A, max(Idle current floor, 3 × capacity_mAh / 20000))`.
+**Idle current floor** defaults to **0.3 A** and can be increased to **1.5 A** in **0.1 A** steps.
+The field is available for Motor glider with Consumed mAh; other measurement methods keep their own behaviour.
+At the default setting, a 450–1500 mAh pack permits up to 0.3 A, while a 3300 mAh pack permits 0.495 A.
+Servo load above the effective limit can still interrupt the check with the motor stopped.
+Changing the floor starts a new battery check. Existing widgets receive the 0.3 A default and retain
+all other settings; the value is saved with the widget.
 
 Until accepted, percentage and remaining mAh stay unknown. A worst-case voltage/counter disagreement
 of at most 10 percentage points can be accepted automatically; more than 10 through 20 requires
@@ -126,7 +140,9 @@ manual confirmation because its flat voltage curve cannot reliably verify charge
 Manual acceptance requires a known motor OFF state. With a selected motor source, its current
 reading must be valid and at or below **Motor ON above**; otherwise a valid current reading must be below
 **Motor current gate**. The app checks this again when **Confirm** is pressed, so an open dialog
-cannot approve the counter after the motor is armed.
+cannot approve the counter after the motor is armed. Manual acceptance also checks the same effective
+idle-current limit. **Motor current gate** is a separate motor-status setting and does not replace the
+battery-check limit.
 
 Once accepted, normal voltage sag or motor load does not restart the comparison. An unexpected
 consumption-counter decrease makes remaining capacity unknown and needs a fresh check and explicit

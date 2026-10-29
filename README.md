@@ -2,9 +2,9 @@
 
 Sailplane and motor-glider instruments for FrSky ETHOS, in the VoltDeck and GasDeck family.
 
-**Stable release: SoarDeck 2026.10-v1** · Suite version **26.10.1**
+**Stable release: SoarDeck 2026.10-v2** · Suite version **26.10.2**
 
-[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/latest) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
+[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.10-v2/SoarDeck-2026.10-v2.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
 
 ![Deck with Multiplex Heron](docs/images/02-deck-heron-photo.png)
 
@@ -25,7 +25,7 @@ Screenshots show the actual app in the ETHOS simulator with illustrative telemet
 
 ## Install
 
-1. Download **SoarDeck-2026.10-v1.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
+1. Download **SoarDeck-2026.10-v2.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
 2. Back up the model and settings. Connect the radio's script storage in FrSky Suite.
 3. Open **Lua library → Install Lua scripts**, select the ZIP and click **Install scripts**.
 4. Restart ETHOS. Add **SoarDeck** to a full-screen widget area and open **Configure widget**.
@@ -40,6 +40,25 @@ remove only <code>/scripts/SoarDeck/main.luac</code> and restart again. Model im
 
 [English setup](docs/Configuration.md) · [Norsk oppsett](docs/Konfigurasjon-norsk.md)
 
+## Full-screen widget
+
+SoarDeck instruments require a widget area that matches the radio's complete LCD dimensions.
+This is not a fixed 800 × 480 requirement: a smaller LCD is full screen when its widget area matches it.
+A split area shows **Full screen required** and clears the old instrument view. Returning to a full-screen
+area resumes the instruments automatically. If ETHOS does not provide usable LCD dimensions,
+**Screen size unavailable** is shown while the app retries at a bounded rate.
+Telemetry processing, battery checks, timers, history and alerts continue in these information states.
+
+## Motor-battery idle current
+
+Under **Motor battery**, **Idle current floor** defaults to **0.3 A** and can be raised to **1.5 A**
+in **0.1 A** steps. It applies to **Motor glider → Consumed mAh**. The battery check permits the larger
+of this floor and the capacity-dependent limit, capped at 1.5 A. A 450–1500 mAh pack therefore permits
+up to 0.3 A with the default setting. The 10-second check, voltage checks and manual motor-OFF guard remain.
+Changing the floor starts a new battery check. Existing widgets receive the 0.3 A default and keep their
+other settings. Back up the model before testing; stable v1 can read the existing settings again but uses
+its original current limit.
+
 ## Vario audio and measurement
 
 Configure native ETHOS **Play vario** separately with the same **VSpeed** source and a physical activation switch.
@@ -50,7 +69,7 @@ GPS ground speed is separate from measured pitot airspeed. Missing or stale read
 
 ## Compatibility
 
-Simulator coverage includes X20RS on ETHOS **1.6.6**, **26.1.2** and **26.2.0-RC2**; physical-radio feedback covers **26.1.2**.
+Simulator coverage includes X20RS on ETHOS **1.6.6**, **26.1.2** and **26.2.0-RC2**.
 RC coverage is exploratory. Check the actual sources, units and behaviour on your radio/model combination.
 
 ## Deck family

@@ -1,6 +1,6 @@
 # Konfigurere SoarDeck
 
-**SoarDeck 2026.10-v1** · [Bildeguide: alle 16 oppsett](Bildeguide-norsk.md)
+**SoarDeck 2026.10-v2** · [Bildeguide: alle 16 oppsett](Bildeguide-norsk.md)
 
 [English](Configuration.md) · [Oversikt og installasjon](../README.md)
 
@@ -20,6 +20,15 @@ Bruk vanlig **8-bit RGB/RGBA PNG**, gjerne med gjennomsiktig bakgrunn. Bildet ka
 overskrider pikselgrensen. Sideforholdet beholdes. Velg Hidden for ren instrumentering.
 For **Image file** kopierer du bildet til `/bitmaps/models/` på radioen og velger det i feltet
 **Image file**. Modellbilder følger ikke med i widgetens ZIP-fil.
+
+## Bruk et fullskjermsfelt
+
+Widgetfeltet må ha samme bredde og høyde som radioens faktiske LCD. Dette er ikke en fast grense på
+800 × 480; også en mindre LCD med et like stort widgetfelt er fullskjerm. Et delt felt viser
+**Full screen required** og fjerner det gamle instrumentbildet. Velg fullskjerm igjen for å få
+instrumentene automatisk tilbake. Hvis LCD-målene mangler eller er ugyldige, vises
+**Screen size unavailable** mens appen prøver på nytt med avgrenset hyppighet. Telemetriberegning,
+batterigodkjenning, tidtakere, historikk og varsler fortsetter i disse informasjonstilstandene.
 
 ## Velg høyde og VSpeed
 
@@ -112,8 +121,14 @@ den svakeste cellen. En strømsensor trenger en egnet forbrukt-mAh-kilde i ETHOS
 forbruk fra motortid og integrerer ikke strøm når en forbruksteller mangler.
 
 For Consumed mAh trenger hvert nytt batteri **10 sammenhengende sekunder** med høyst **0,20 V variasjon
-for hele pakken**, og strøm høyst `min(1,5 A, 3 × kapasitet / 20000)`. Med 3300 mAh er grensen 0,495 A.
-Servolast kan avbryte kontrollen selv om motoren er stoppet.
+for hele pakken**, og strøm høyst
+`min(1,5 A; max(Idle current floor; 3 × kapasitet_mAh / 20000))`.
+**Idle current floor** er normalt **0,3 A** og kan økes til **1,5 A** i trinn på **0,1 A**.
+Feltet er tilgjengelig for Motor glider med Consumed mAh; andre målemetoder beholder sin egen oppførsel.
+Med standardverdien tillates opptil 0,3 A for pakker på 450–1500 mAh, mens 3300 mAh tillater 0,495 A.
+Servolast over den effektive grensen kan fortsatt avbryte kontrollen selv om motoren er stoppet.
+Endring av minstegrensen starter en ny batterikontroll. Eksisterende widgeter får standardverdien
+0,3 A og beholder alle andre innstillinger. Verdien lagres med widgeten.
 
 Inntil kontrollen er godkjent, er prosent og gjenværende mAh ukjent. Største avvik mellom teller og
 spenningsreferanse på høyst 10 prosentpoeng kan godkjennes automatisk. Over 10 til og med 20 krever
@@ -124,7 +139,9 @@ bekreftelse fordi den flate spenningskurven ikke pålitelig kan bekrefte lading.
 Manuell godkjenning krever kjent motor OFF. Med valgt motorkilde må den aktuelle målingen være
 gyldig og på eller under **Motor ON above**; ellers må gyldig strøm være under **Motor current gate**.
 Appen kontrollerer dette på nytt når **Confirm** trykkes, slik at en åpen dialog ikke kan godkjenne
-telleren etter at motoren er armert.
+telleren etter at motoren er armert. Manuell godkjenning kontrollerer også den samme effektive
+hvilestrømgrensen. **Motor current gate** er en separat innstilling for motorstatus og erstatter ikke
+batterikontrollens strømgrense.
 
 Etter godkjenning starter ikke normalt spenningsfall eller motorlast sammenligningen på nytt.
 Uventet fall i forbrukstelleren gjør gjenværende kapasitet ukjent og krever ny kontroll og uttrykkelig
