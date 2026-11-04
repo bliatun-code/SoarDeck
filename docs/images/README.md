@@ -8,4 +8,4 @@ See the [English walkthrough](../Walkthrough.md), [Norwegian walkthrough](../Bil
 
 ## Sensor setup, 2026.11-v1
 
-The four `sensor-setup-*.png` images are unretouched 800 × 480 native ETHOS 26.2.0 RC2 / X20RS simulator captures of this release. Discovered example sensors illustrate staged suggestions, alternative RF choices and confirmation. No physical sensors were connected. Other images retain their stated original provenance.
+The four `sensor-setup-*.png` images were captured again on 4 November 2026 using a clean example model in the native ETHOS 26.2.0 RC2 / X20RS simulator, running 2026.11-v1. They are unretouched 800 × 480 captures. Discovered example sensors illustrate staged suggestions, alternative RF choices and confirmation. No physical sensors were connected. Other images retain their stated original provenance.
