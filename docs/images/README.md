@@ -5,3 +5,7 @@ The 16 dashboard captures show SoarDeck 2026.10-v1 in the ETHOS 26.1.2 X20RS sim
 Photo examples use a basic barovario/RX/link setup; motor-glider examples add a 3S 2200 mAh pack with accepted consumed mAh. Instrument-only examples additionally configure optional pitot airspeed and GPS ground-speed sources; the selected style determines which readings appear. Pitot airspeed is visible in the Classic instrument views and Daylight Heron instrument view; GPS speed is not visible in these captures. Hiding the picture is independent of sensor selection.
 
 See the [English walkthrough](../Walkthrough.md), [Norwegian walkthrough](../Bildeguide-norsk.md) and [artwork notices](../../NOTICE.md).
+
+## Sensor setup, 2026.11-v1
+
+The four `sensor-setup-*.png` images are unretouched 800 × 480 native ETHOS 26.2.0 RC2 / X20RS simulator captures of this release. Discovered example sensors illustrate staged suggestions, alternative RF choices and confirmation. No physical sensors were connected. Other images retain their stated original provenance.

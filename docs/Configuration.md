@@ -1,6 +1,6 @@
 # Configure SoarDeck
 
-**SoarDeck 2026.10-v2** · [Illustrated walkthrough: all 16 layouts](Walkthrough.md)
+**SoarDeck 2026.11-v1** · [Illustrated walkthrough: all 16 layouts](Walkthrough.md)
 
 [Norsk](Konfigurasjon-norsk.md) · [Overview and installation](../README.md)
 
@@ -29,6 +29,27 @@ limit; a smaller matching LCD/window pair is also full screen. A split area show
 and clears the old instrument view. Restore a full-screen area to resume the instruments automatically.
 If the LCD dimensions are unavailable or invalid, **Screen size unavailable** is shown and the app retries
 at a bounded rate. Telemetry processing, battery qualification, timers, history and alerts continue.
+
+## Sensor setup
+
+Discover the model's sensors in **ETHOS → Telemetry** first. Open **Configure widget → Sensor setup** after choosing **Model type**.
+
+1. Press **Suggest sensors**. Matches use the measurement type, unit and sensor name.
+2. Review the list. Choose a sensor where alternatives are offered; leave unused fields empty.
+3. Press **Apply...**, check the confirmation and choose **Use suggestions**. **Cancel** saves nothing.
+
+Available selections are kept, including sensors that are temporarily offline. A missing source is replaced only when you choose a replacement. **Clear** discards the suggestions. You can still use the ordinary source fields.
+
+**Sailplane** offers flight and receiver sensors; **Motor glider** also offers motor-battery sensors. Choose a matching altitude/VSpeed pair if several barometers are fitted.
+
+Sensor setup does not create calculated sensors. If consumed mAh is missing, create a consumption sensor from current in ETHOS, then run **Suggest sensors** again. Confirm the battery settings and telemetry before flying.
+
+<table>
+<tr><td><img src="images/sensor-setup-menu.png" alt="SoarDeck configuration and version"><br><b>Open Sensor setup</b></td><td><img src="images/sensor-setup-scan.png" alt="Sensor suggestions"><br><b>Find suitable sensors</b></td></tr>
+<tr><td><img src="images/sensor-setup-choices.png" alt="Choice between matching radio-link sensors"><br><b>Choose between alternatives</b></td><td><img src="images/sensor-setup-confirm.png" alt="Confirmation before saving"><br><b>Confirm before saving</b></td></tr>
+</table>
+
+These new menu captures show SoarDeck 2026.11-v1 in the ETHOS 26.2.0 RC2 X20RS simulator with example sensors. Names and match counts depend on your model.
 
 ## Select altitude and VSpeed
 

@@ -2,9 +2,9 @@
 
 Sailplane and motor-glider instruments for FrSky ETHOS, in the VoltDeck and GasDeck family.
 
-**Stable release: SoarDeck 2026.10-v2** · Suite version **26.10.2**
+**Stable release: SoarDeck 2026.11-v1** · Suite version **26.11.1**
 
-[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.10-v2/SoarDeck-2026.10-v2.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
+[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.11-v1/SoarDeck-2026.11-v1.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
 
 ![Deck with Multiplex Heron](docs/images/02-deck-heron-photo.png)
 
@@ -23,13 +23,17 @@ Sailplane and motor-glider instruments for FrSky ETHOS, in the VoltDeck and GasD
 The [walkthrough](docs/Walkthrough.md) shows all **16 combinations** with a source table for each example profile.
 Screenshots show the actual app in the ETHOS simulator with illustrative telemetry.
 
+## Sensor setup
+
+Discover the sensors in ETHOS, then open **Configure widget → Sensor setup → Suggest sensors**. Review the matches, choose between alternatives and use **Apply... → Use suggestions** to save. Existing available selections are kept. [Step-by-step guide](docs/Configuration.md#sensor-setup).
+
 ## Install
 
-1. Download **SoarDeck-2026.10-v2.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
+1. Download **SoarDeck-2026.11-v1.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
 2. Back up the model and settings. Connect the radio's script storage in FrSky Suite.
 3. Open **Lua library → Install Lua scripts**, select the ZIP and click **Install scripts**.
 4. Restart ETHOS. Add **SoarDeck** to a full-screen widget area and open **Configure widget**.
-5. Choose model type and real telemetry sources. Zero relative altitude on the ground. Keep **Synthetic preview** off for live use.
+5. Choose model type, then use **Sensor setup** to review and confirm suitable sensors. Zero relative altitude on the ground. Keep **Synthetic preview** off for live use.
 
 For manual installation, copy all five extracted files into <code>/scripts/SoarDeck/</code>:
 

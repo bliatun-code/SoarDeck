@@ -2,7 +2,451 @@
 -- Copyright (c) 2026 bliatun-code and SoarDeck contributors.
 -- SoarDeck: sailplane instrumentation for FrSky ETHOS.
 -- Generated standalone main.lua has no runtime module dependencies.
-local VERSION = "2026.10-v2"
+-- SPDX-License-Identifier: MIT
+-- Release form-owned upvalues without retargeting retained native setters.
+local FormLifecycle = {}
+function FormLifecycle.release(owner)
+    if type(owner) ~= "table" then return end
+    local releases = owner._deckFormReleases
+    owner._deckFormReleases, owner._deckFormModel = nil, nil
+    if releases then
+        for index = 1, #releases do releases[index](); releases[index] = nil end
+    end
+end
+function FormLifecycle.begin(owner, model, release)
+    owner._deckFormModel, owner._deckFormReleases = model, {release}
+end
+function FormLifecycle.attach(owner, release)
+    local releases = owner._deckFormReleases
+    if releases then releases[#releases + 1] = release end
+end
+function FormLifecycle.modelChanged(owner, model)
+    if owner._deckFormReleases and owner._deckFormModel ~= model then FormLifecycle.release(owner) end
+end
+function FormLifecycle.current(owner, generation, model, identity, valid)
+    if not valid(owner) or not owner._deckFormReleases or owner.configGeneration ~= generation then return false end
+    local actual = identity()
+    return valid(owner) and owner._deckFormReleases ~= nil and owner.configGeneration == generation
+        and owner._deckFormModel == model and actual == model
+end
+function FormLifecycle.configure(owner, build, valid)
+    if not valid(owner) then return end
+    FormLifecycle.release(owner)
+    local ok, problem = pcall(build, owner)
+    if not ok then FormLifecycle.release(owner); error(problem, 0) end
+end
+-- SPDX-License-Identifier: MIT
+-- Keep unresolved stored references distinct from an explicit user selection of None.
+-- No lookup by a display label and no shared routing between widget instances.
+local SourcePersistence = {}
+function SourcePersistence.decode(raw, restore)
+    local values, retained = {}, {}
+    for key, value in pairs(raw) do
+        local source = restore(value)
+        values[key] = source
+        if source == nil and value ~= nil and value ~= false and value ~= "" then
+            retained[key] = value
+        end
+    end
+    return values, retained
+end
+function SourcePersistence.value(owner, key, source, model)
+    if source ~= nil and source ~= false then return source end
+    if owner.sourceReadModel == model and owner.sourceFallback then
+        local retained = owner.sourceFallback[key]
+        if retained ~= nil then return retained end
+    end
+    return nil
+end
+function SourcePersistence.selected(owner, key)
+    if owner.sourceFallback then owner.sourceFallback[key] = nil end
+end
+function SourcePersistence.notice(owner)
+    return owner.sourceFallback and next(owner.sourceFallback) ~= nil
+        and "Unavailable source selections retained. Reselect to change." or nil
+end
+-- SPDX-License-Identifier: MIT
+local SensorSetup = {}
+
+local function readInfo(source)
+    return source:name(), source:unit(), source:member(), source:options(), source:category()
+end
+
+local function sensorInfo(source)
+    if type(source)~="userdata" and type(source)~="table" then return end
+    local ok,name,unit,member,options,category=pcall(readInfo,source)
+    if not ok or type(name)~="string" or name=="" or name=="---" or type(member)~="number"
+        or category==nil or category==CATEGORY_NONE then return end
+    return {source=source,name=name,unit=unit,member=member,options=options,category=category}
+end
+
+local function same(a,b)
+    return a and b and a.member==b.member and a.options==b.options and a.name==b.name and a.unit==b.unit
+end
+
+local function catalog()
+    local ok, sources = pcall(system.getSources, CATEGORY_TELEMETRY_SENSOR)
+    if not ok or type(sources)~="table" or #sources>128 then return end
+    local sensors,byMember,byUnit={},{},{}
+    for _,source in ipairs(sources) do
+        local info=sensorInfo(source)
+        if info and info.category==CATEGORY_TELEMETRY_SENSOR then
+            info.tag=info.name:lower():gsub("[^%w]","")
+            sensors[#sensors+1]=info
+            byMember[info.member]=info
+            local unit=info.unit
+            if unit~=nil then
+                local bucket=byUnit[unit]
+                if not bucket then bucket={};byUnit[unit]=bucket end
+                bucket[#bucket+1]=info
+            end
+        end
+    end
+    return sensors,byMember,byUnit
+end
+
+local function oneOf(unit,a,b,c,d)
+    return unit~=nil and (unit==a or unit==b or unit==c or unit==d)
+end
+
+local roleUnits={}
+local function units(roles,...)
+    local set={}
+    for index=1,select("#",...) do
+        local unit=select(index,...)
+        if unit~=nil then set[#set+1]=unit end
+    end
+    for _,role in ipairs(roles) do roleUnits[role]=set end
+end
+units({"pack","rx1","rx2"},UNIT_VOLT,UNIT_MILLIVOLT)
+units({"current","rxcurrent"},UNIT_AMPERE,UNIT_MILLIAMPERE)
+units({"used","rxused"},UNIT_MILLIAMPERE_HOUR,UNIT_AMPERE_HOUR)
+units({"rpm"},UNIT_RPM)
+units({"rf"},UNIT_DB,UNIT_PERCENT)
+units({"flow"},UNIT_MILLILITER_PER_MINUTE)
+units({"temperature","escTemperature"},UNIT_CELSIUS,UNIT_FAHRENHEIT,UNIT_DEGREE_CELSIUS,UNIT_DEGREE_FAHRENHEIT)
+units({"altitude"},UNIT_METER,UNIT_FOOT,UNIT_KILOMETER)
+units({"vario"},UNIT_METER_PER_SECOND,UNIT_FOOT_PER_SECOND,UNIT_METER_PER_MINUTE,UNIT_FOOT_PER_MINUTE)
+units({"airspeed","groundspeed"},UNIT_KILOMETER_PER_HOUR,UNIT_METER_PER_SECOND,UNIT_MILE_PER_HOUR,UNIT_KNOT)
+
+local aliases={}
+local function names(role, words)
+    local set={}
+    for name in words:gmatch("%S+") do set[name]=true end
+    aliases[role]=set
+end
+names("pack","escvoltage escvolt escv packvoltage packvolt flightbatteryvoltage vfas")
+names("current","esccurrent esca packcurrent flightbatterycurrent curr current")
+names("used","escconsumption escconsumed escmah packconsumption consumedmah consumption capa")
+names("rxcurrent","rxcurrent rxtotalcurrent")
+names("rxused","rxconsumption rxconsuption rxconsumed rxtotalconsumed rxmah consumption consumedmah")
+names("rx1","rxbatt rxbt rxvoltage rxbattery")
+names("escTemperature","esctemp esctemperature")
+names("altitude","alt altitude baroalt baroaltitude gpsalt gpsaltitude galt")
+names("vario","vario vspeed verticalspeed vspd climbrate")
+names("airspeed","airspeed pitot pitotairspeed aspd")
+names("groundspeed","gpsspeed groundspeed gpsgroundspeed gspd")
+names("genericCurrent","current curr")
+names("genericUsed","consumedmah consumption capa")
+names("genericRxUsed","consumedmah consumption")
+names("engineTemp","enginetemperature enginetemp aestemp cht")
+names("flow","aesflow fuelflow flow")
+
+local function match(sensor, role)
+    local u,n=sensor.unit,sensor.tag
+    if role=="rf" then
+        return (u==UNIT_DB and n:match("^rssi[%dgmhz]*$"))
+            or (u==UNIT_PERCENT and n:match("^vfr[%dgmhz]*$"))
+    elseif role=="rx1" or role=="rx2" then
+        if n:sub(1,2)~="rx" then return false end
+        local number=n:match("^rxbatt(%d)$") or n:match("^rx(%d)voltage$") or n:match("^rxvoltage(%d)$")
+        return number==role:sub(-1) or (role=="rx1" and aliases.rx1[n])
+    elseif role=="rpm" or role=="temperature" then
+        return true
+    end
+    return aliases[role][n]
+end
+
+-- The unit gives the measurement type, but several roles share the same
+-- unit. Offer unit-only matches as manual choices when no role name matches.
+local function sameMeasurement(sensor,role)
+    local u,n=sensor.unit,sensor.tag
+    if role=="flow" then
+        return u==UNIT_MILLILITER_PER_MINUTE and not n:find("max",1,true)
+            and not n:find("avg",1,true) and not n:find("average",1,true) and not n:find("minflow",1,true)
+    elseif role=="pack" or role=="rx1" or role=="rx2" then
+        if not oneOf(u,UNIT_VOLT,UNIT_MILLIVOLT) then return false end
+        if n:match("cell%d*$") or n:match("^cell%d*voltage$") or n:match("^tx") then return false end
+        if role=="pack" then return not n:match("^rx") end
+        return not match(sensor,"pack") and not match(sensor,role=="rx1" and "rx2" or "rx1")
+    elseif role=="current" or role=="rxcurrent" then
+        if not oneOf(u,UNIT_AMPERE,UNIT_MILLIAMPERE) then return false end
+        if role=="current" then return not n:match("^rx") end
+        return not n:match("^esc") and not n:match("^pack")
+    elseif role=="used" or role=="rxused" then
+        if not oneOf(u,UNIT_MILLIAMPERE_HOUR,UNIT_AMPERE_HOUR) then return false end
+        if role=="used" then return not n:match("^rx") end
+        return not n:match("^esc") and not n:match("^pack")
+    elseif role=="altitude" then
+        return oneOf(u,UNIT_METER,UNIT_FOOT,UNIT_KILOMETER) and not n:find("dist",1,true)
+    elseif role=="vario" then
+        return oneOf(u,UNIT_METER_PER_SECOND,UNIT_FOOT_PER_SECOND,UNIT_METER_PER_MINUTE,UNIT_FOOT_PER_MINUTE)
+            and not match(sensor,"airspeed") and not match(sensor,"groundspeed")
+    elseif role=="airspeed" or role=="groundspeed" then
+        return oneOf(u,UNIT_KILOMETER_PER_HOUR,UNIT_METER_PER_SECOND,UNIT_MILE_PER_HOUR,UNIT_KNOT)
+            and not match(sensor,"vario") and not match(sensor,role=="airspeed" and "groundspeed" or "airspeed")
+    end
+    return false
+end
+
+local function manualOnly(row, sensor)
+    if row.manual then return true end
+    local n=sensor.tag
+    return (row.role=="current" and aliases.genericCurrent[n])
+        or (row.role=="used" and aliases.genericUsed[n])
+        or (row.role=="rxused" and aliases.genericRxUsed[n])
+        or (row.role=="temperature" and not aliases.engineTemp[n])
+end
+
+-- All controls are native widget form controls. The draft lives only as long
+-- as this form generation, and no field is written until the dialog confirms.
+function SensorSetup.add(owner, panel, rows, current, sourceFor, apply, consumptionHint, reviewHint, methods)
+    if type(system.getSources)~="function" or CATEGORY_TELEMETRY_SENSOR==nil then return end
+    local draft,picks,fields,status,hint,pending,states
+    local function sourceState(source,byMember)
+        if not source then return end
+        local info=sensorInfo(source)
+        if not info then return "Unavailable",nil end
+        if info.category~=CATEGORY_TELEMETRY_SENSOR then return info.name,info end
+        local known=byMember and byMember[info.member]
+        -- Existing derived telemetry options are valid even when the catalog
+        -- only lists their base sensor. Never use telemetry freshness here.
+        if not byMember or (known and known.name==info.name) then return info.name,info end
+        return "Unavailable",nil
+    end
+    local function stateFor(byMember)
+        local snapshot,used={},{}
+        for i,row in ipairs(rows) do
+            local source=sourceFor(row.key)
+            local label,info=sourceState(source,byMember)
+            snapshot[i]={source=source,label=label,replaceable=source~=nil and info==nil}
+            if info and info.category==CATEGORY_TELEMETRY_SENSOR then
+                used[info.member]=true
+            end
+        end
+        return snapshot,used
+    end
+    local function setStatus(message)
+        if current() and status and type(status.value)=="function" then status:value(message) end
+    end
+    local function refresh()
+        if not current() then return end
+        for i,row in ipairs(rows) do
+            local candidates=draft and draft[i]
+            local enabled=candidates~=nil
+            local label=states[i].label
+            if enabled then label=label and "Keep unavailable" or "Choose / leave empty" end
+            local choices={{label or "---",0}}
+            if enabled then
+                for index,candidate in ipairs(candidates) do
+                    choices[#choices+1]={candidate.label or candidate.name,index}
+                end
+            end
+            local field=fields[i]
+            if field then
+                field:values(choices)
+                field:enable(enabled)
+            end
+        end
+    end
+    local function clear(message)
+        draft,picks,pending=nil,nil,nil
+        refresh()
+        setStatus(message)
+    end
+    local function scan()
+        if not current() then return end
+        local sensors,byMember,byUnit=catalog()
+        if not current() then return end
+        if not sensors then clear("Sensor list unavailable. Use the source fields.");return end
+        local used
+        states,used=stateFor(byMember)
+        draft,picks={},{}
+        local ready,manual=0,0
+        local found,missingConsumption,tooMany={},false,false
+        local matches={}
+        for i,row in ipairs(rows) do
+            local state,role=states[i],row.role
+            if state.source and not state.replaceable then found[role]=true end
+            if (not state.source or state.replaceable) and (not row.enabled or row.enabled()) then
+                local result=matches[role]
+                if not result then
+                    local candidates={}
+                    for _,unit in ipairs(roleUnits[role]) do
+                        local bucket=byUnit[unit]
+                        if bucket then
+                            for _,sensor in ipairs(bucket) do
+                                if not used[sensor.member] and match(sensor,role) then candidates[#candidates+1]=sensor end
+                            end
+                        end
+                    end
+                    local unitOnly=#candidates==0
+                    if unitOnly then
+                        for _,unit in ipairs(roleUnits[role]) do
+                            local bucket=byUnit[unit]
+                            if bucket then
+                                for _,sensor in ipairs(bucket) do
+                                    if not used[sensor.member] and sameMeasurement(sensor,role) then candidates[#candidates+1]=sensor end
+                                end
+                            end
+                        end
+                    end
+                    local names={}
+                    for _,sensor in ipairs(candidates) do names[sensor.name]=(names[sensor.name] or 0)+1 end
+                    for _,sensor in ipairs(candidates) do
+                        if names[sensor.name]>1 then sensor.label=string.format("%s (#%d)",sensor.name,sensor.member+1) end
+                    end
+                    result={candidates=candidates,unitOnly=unitOnly}
+                    matches[role]=result
+                end
+                local candidates=result.candidates
+                if #candidates>16 then
+                    state.label="Use source field"
+                    tooMany=true
+                elseif #candidates>0 then
+                    found[role]=true
+                    draft[i]=candidates
+                    if #candidates==1 and not state.replaceable and not result.unitOnly
+                        and not manualOnly(row,candidates[1]) and not (row.choose and row.choose()) then
+                        picks[i]=1
+                        ready=ready+1
+                    else manual=manual+1 end
+                elseif role=="used" or role=="rxused" then missingConsumption=true end
+            end
+        end
+        refresh()
+        setStatus(tooMany and "Large list: use the regular fields where indicated."
+            or ready+manual==0 and "No new sensor suggestions."
+            or string.format("%d suggested, %d need a choice.",ready,manual))
+        if current() and hint and type(hint.value)=="function" then
+            hint:value(missingConsumption and (found.pack or found.rx1 or found.rx2)
+                and (found.current or found.rxcurrent) and consumptionHint
+                or (reviewHint and reviewHint(found)) or "Review choices before applying.")
+        end
+    end
+    local function selected()
+        local selections={}
+        if draft then
+            for i,row in ipairs(rows) do
+                local candidate=draft[i] and draft[i][picks[i] or 0]
+                if candidate then
+                    selections[#selections+1]={row=row,index=i,sensor=candidate,previous=states[i].source}
+                end
+            end
+        end
+        return selections
+    end
+    local function methodPlan(changes,snapshot)
+        if not methods then return {},nil end
+        local sources={}
+        for i,row in ipairs(rows) do
+            if not snapshot[i].replaceable then sources[row.key]=snapshot[i].source end
+        end
+        for key,source in pairs(changes) do sources[key]=source end
+        return methods(sources,changes)
+    end
+    local function confirm()
+        if not current() then return end
+        local selections=selected()
+        if not draft then setStatus("Find or choose sensors first.");return end
+        local proposed={}
+        for _,selection in ipairs(selections) do proposed[selection.row.key]=selection.sensor.source end
+        local updates,methodMessage=methodPlan(proposed,states)
+        local originals,methodCount={},0
+        for key in pairs(updates) do originals[key]=owner[key];methodCount=methodCount+1 end
+        if #selections==0 and methodCount==0 then setStatus("Find or choose sensors first.");return end
+        local seen={}
+        for _,selection in ipairs(selections) do
+            local member=selection.sensor.member
+            if seen[member] then setStatus("Choose different sources for each field.");return end
+            seen[member]=true
+        end
+        pending=selections
+        form.openDialog({title="Use sensor suggestions?",message=string.format(
+            "Save %d selected sources. %s",#selections,methodMessage
+                or "Unavailable sources are replaced only if you chose a replacement."),
+            buttons={{label="Cancel",action=function() pending=nil;return true end},
+                {label="Use suggestions",action=function()
+                    if not current() or not pending then return true end
+                    local selections=pending
+                    pending=nil
+                    local sensors,byMember=catalog()
+                    if not sensors or not current() then return true end
+                    local latest,used=stateFor(byMember)
+                    local changes={}
+                    for _,selection in ipairs(selections) do
+                        local state,row=latest[selection.index],selection.row
+                        local sensor=byMember[selection.sensor.member]
+                        if state.source==selection.previous and (not state.source or state.replaceable)
+                            and (not row.enabled or row.enabled()) and not used[selection.sensor.member]
+                            and same(sensor,selection.sensor) then
+                            changes[row.key]=sensor.source
+                        end
+                    end
+                    if current() then
+                        local count=0
+                        for _ in pairs(changes) do count=count+1 end
+                        local nextUpdates,nextMessage=methodPlan(changes,latest)
+                        local validMethods=nextMessage==methodMessage
+                        for key,value in pairs(updates) do
+                            if owner[key]~=originals[key] or nextUpdates[key]~=value then validMethods=false end
+                        end
+                        for key in pairs(nextUpdates) do if updates[key]==nil then validMethods=false end end
+                        -- Existing sources used by a method proposal must also stay
+                        -- identified and unchanged while the confirmation is open.
+                        if methodCount>0 then
+                            for i,state in ipairs(states) do
+                                if state.source~=latest[i].source or state.label~=latest[i].label
+                                    or state.replaceable~=latest[i].replaceable then validMethods=false end
+                            end
+                        end
+                        if count==#selections and validMethods then
+                            for key in pairs(changes) do SourcePersistence.selected(owner,key) end
+                            apply(changes,updates)
+                            if current() then states=stateFor(byMember);clear("Sensor suggestions applied.") end
+                        else clear("No changes. Find sensors again.") end
+                    end
+                    return true
+                end}}})
+    end
+    local function button(label, text, action)
+        form.addButton(form.addLine(label,panel),nil,{text=text,press=action})
+    end
+    button("Find matching sensors","Suggest sensors",scan)
+    local ok,width=pcall(form.width)
+    local rect={x=8,y=0,w=ok and math.max(30,width-16) or 720,h=30}
+    status=form.addStaticText(form.addLine("",panel),rect,"Find sensors for empty fields.")
+    hint=form.addStaticText(form.addLine("",panel),rect,"Review choices before applying.")
+    fields={}
+    states=stateFor()
+    for i,row in ipairs(rows) do
+        fields[i]=form.addChoiceField(form.addLine(row.label,panel),nil,
+            {{states[i].label or "---",0}},function()
+            return current() and picks and picks[i] or 0
+        end,function(value)
+            if not current() or not draft or not draft[i] or (value~=0 and not draft[i][value]) then return end
+            picks[i]=value
+            setStatus("Review the selections, then choose Apply.")
+        end)
+        if fields[i] then fields[i]:enable(false) end
+    end
+    button("Save selected sources","Apply...",confirm)
+    button("Discard suggestions","Clear",function() if current() then clear("Suggestions cleared.") end end)
+    FormLifecycle.attach(owner,function()
+        draft,picks,fields,status,hint,rows,pending,states,owner,methods=nil,nil,nil,nil,nil,nil,nil,nil,nil,nil
+    end)
+end
+local VERSION = "2026.11-v1"
 local Soar = (function()
     local M = {}
     function M.finite(n) return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
@@ -2067,7 +2511,7 @@ local function resetSamples(w)
     w.filter=nil; w.altSample=nil; w.averageSamples={};w.history={};w.lastHistory=nil
     w.data.vario,w.data.average=nil,nil
 end
-local function changed(w,kind)
+local function changed(w,kind,markDirty)
     if not Soar.valid(w) then return end
     normalise(w.cfg);w.generation=w.generation+1;w.nextPoll=0;w.refresh=true
     if kind=="altitude" or kind=="reference" then
@@ -2077,7 +2521,8 @@ local function changed(w,kind)
     elseif kind=="preview" then
         resetSamples(w);w.batteryState=SoarBattery.new();w.session={flightTime=0,motorTime=0};w.data={};w.lastPoll=nil
     elseif kind=="image" then w.loadedImagePath=nil;w.bitmap=nil end
-    Soar.dirty();Soar.invalidate()
+    if markDirty~=false then Soar.dirty() end
+    Soar.invalidate()
 end
 local function create()
     local key,name=Soar.modelKey()
@@ -2099,15 +2544,22 @@ local function read(w)
     w.cfg.idleCurrentFloor=0.3
     for _,d in ipairs(DEFAULTS) do local v=Soar.call(storage.read,d[1]);if v~=nil then w.cfg[d[1]]=v end end
     normalise(w.cfg)
-    for _,d in ipairs(SOURCE_DEFS) do local v=Soar.call(storage.read,d[1]);if v~=nil then w.sources[d[1]]=Soar.restore(v) end end
-    changed(w,"read")
+    -- Do not turn an unresolved stored name into a saved explicit None.
+    local raw={}
+    for _,d in ipairs(SOURCE_DEFS) do raw[d[1]]=Soar.call(storage.read,d[1]) end
+    local values,retained=SourcePersistence.decode(raw,Soar.restore)
+    for _,d in ipairs(SOURCE_DEFS) do if raw[d[1]]~=nil then w.sources[d[1]]=values[d[1]] end end
+    w.sourceFallback,w.sourceReadModel=retained,select(1,Soar.modelKey())
+    -- A read refreshes runtime state without requesting persistence of defaults.
+    changed(w,"read",false)
 end
 local function write(w)
     if not Soar.valid(w) or w.readOnly then return end
     normalise(w.cfg)
+    local sourceModel=Soar.modelKey()
     storage.write("schema",1)
     for _,d in ipairs(DEFAULTS) do storage.write(d[1],w.cfg[d[1]]) end
-    for _,d in ipairs(SOURCE_DEFS) do storage.write(d[1],w.sources[d[1]]) end
+    for _,d in ipairs(SOURCE_DEFS) do storage.write(d[1],SourcePersistence.value(w,d[1],w.sources[d[1]],sourceModel)) end
 end
 local function imagePath(name)
     if type(name)~="string" then return "" end
@@ -2319,7 +2771,9 @@ local function poll(w,now)
     local key,name=Soar.modelKey()
     if not Soar.valid(w) then return end
     if key~=w.modelKey then
+        FormLifecycle.modelChanged(w,key)
         -- A reused callback must not carry another model's source selections/session.
+        w.sourceFallback,w.sourceReadModel=nil,nil
         w.modelKey=key;w.sources={};w.cfg={};normalise(w.cfg)
         w.batteryState=SoarBattery.new();w.session={flightTime=0,motorTime=0};resetSamples(w)
         w.data={modelName=name};w.generation=w.generation+1;return
@@ -2554,14 +3008,18 @@ local function paint(w)
     local supported,width,height,mode=fullScreen(w,Soar.now())
     if supported then SoarRender.paint(w) else screenNotice(w,width,height,mode) end
 end
-local function configure(w)
+local function configureFields(w)
     if not Soar.valid(w) then return end
     SoarBattery.holdForMenu(w.batteryState,batteryConfig(w),Soar.now())
     w.configGeneration=w.configGeneration+1
-    local formGeneration=w.configGeneration
-    local function current() return Soar.valid(w) and w.configGeneration==formGeneration and not w.readOnly end
+    local formGeneration,formModel=w.configGeneration,Soar.modelKey()
+    local function current() return FormLifecycle.current(w,formGeneration,formModel,Soar.modelKey,Soar.valid) and not w.readOnly end
     local panel
     local bindings={}
+    FormLifecycle.begin(w,formModel,function()
+        for index=1,#bindings do bindings[index]=nil end
+        w=nil
+    end)
     local function refresh()
         for _,b in ipairs(bindings) do if current() and b.field and type(b.field.enable)=="function" then b.field:enable(b.enabled()) end end
     end
@@ -2577,6 +3035,7 @@ local function configure(w)
         -- Native choice IDs are integers, even when the engineering value is 2.5.
         local nativeChoices={};for index,choice in ipairs(choices) do nativeChoices[index]={choice[1],index} end
         return bind(form.addChoiceField(line(label),nil,nativeChoices,function()
+            if not current() then return 1 end
             for index,choice in ipairs(choices) do if choice[2]==w.cfg[key] then return index end end
             return 1
         end,function(index)
@@ -2586,19 +3045,22 @@ local function configure(w)
     local function number(label,key,minimum,maximum,suffix,step,kind,enabled)
         local scale=(minimum%1~=0 or maximum%1~=0 or (step and step%1~=0)) and 10 or 1
         local function rounded(n) return math.floor(n*scale+0.5) end
-        local f=form.addNumberField(line(label),nil,rounded(minimum),rounded(maximum),function() return rounded(w.cfg[key]) end,function(v) if current() and (not enabled or enabled()) then w.cfg[key]=v/scale;changed(w,kind) end end)
+        local f=form.addNumberField(line(label),nil,rounded(minimum),rounded(maximum),function() return current() and rounded(w.cfg[key]) or 0 end,function(v) if current() and (not enabled or enabled()) then w.cfg[key]=v/scale;changed(w,kind) end end)
         if suffix and f and type(f.suffix)=="function" then f:suffix(suffix) end
         if step and f and type(f.step)=="function" then f:step(rounded(step)) end
         if scale==10 and f and type(f.decimals)=="function" then f:decimals(1) end
         return bind(f,enabled)
     end
     local function boolean(label,key,kind)
-        return form.addBooleanField(line(label),nil,function() return w.cfg[key] end,function(v) if current() then w.cfg[key]=v;changed(w,kind);refresh() end end)
+        return form.addBooleanField(line(label),nil,function() return current() and w.cfg[key] or false end,function(v) if current() then w.cfg[key]=v;changed(w,kind);refresh() end end)
     end
     local function source(key,label,kind,enabled)
-        return bind(form.addSourceField(line(label),nil,function() return w.sources[key] end,function(v)
+        return bind(form.addSourceField(line(label),nil,function() if current() then return w.sources[key] end end,function(v)
             if current() and (not enabled or enabled()) then
-                w.sources[key]=Soar.selected(v)
+                local source=Soar.selected(v)
+                if not current() then return end
+                SourcePersistence.selected(w,key)
+                w.sources[key]=source
                 if not current() then return end
                 changed(w,kind);refresh()
             end
@@ -2607,15 +3069,41 @@ local function configure(w)
     local function button(label,text,action)
         form.addButton(line(label),nil,{text=text,press=function() if current() then action() end end})
     end
-    form.addLine("SoarDeck "..VERSION)
+    note("SoarDeck "..VERSION)
     if w.configError then note(w.configError);return end
+    local sourceNotice=SourcePersistence.notice(w)
+    if sourceNotice then note(sourceNotice) end
     group("Model / appearance")
     choose("Model type","modelType",{{"Sailplane",1},{"Motor glider",2}})
+    local function motor() return w.cfg.modelType==2 end
+    if type(system.getSources)=="function" then
+        group("Sensor setup")
+        SensorSetup.add(w,panel,{
+            {key="altitudeSource",label="Altitude source",role="altitude"},
+            {key="varioSource",label="VSpeed source",role="vario",enabled=function() return not w.cfg.derivedVario end},
+            {key="airspeedSource",label="Pitot airspeed",role="airspeed"},
+            {key="groundspeedSource",label="GPS ground speed",role="groundspeed"},
+            {key="voltageSource",label="Pack voltage",role="pack",enabled=motor},
+            {key="currentSource",label="Current",role="current",enabled=motor},
+            {key="consumptionSource",label="Consumed mAh",role="used",enabled=function() return motor() and w.cfg.batteryMethod==1 end},
+            {key="rxSource",label="RX voltage",role="rx1"},
+            {key="rfSource",label="Link / Rx VFR",role="rf"},
+        },current,function(key)
+            return SourcePersistence.value(w,key,w.sources[key],formModel)
+        end,function(changes)
+            for key,source in pairs(changes) do w.sources[key]=source end
+            changed(w,changes.altitudeSource and "altitude" or changes.varioSource and "vario")
+            refresh()
+        end, "ETHOS Telemetry: create Consumption from pack current.", function()
+            if not motor() then return "For motor battery sources, choose Model type: Motor glider." end
+        end)
+        group("Appearance")
+    end
     choose("Display style","style",{{"Deck",1},{"Classic",2},{"Thermal",3},{"Daylight",4}})
     choose("Units","unitMode",{{"Metric",1},{"Imperial",2}})
     choose("Model image","imageMode",{{"Selected model",1},{"Image file",2},{"Hidden",3}},"image")
     if type(form.addFileField)=="function" then
-        bind(form.addFileField(line("Image file"),nil,"/bitmaps/models","image+ext",function() return w.cfg.imageName end,function(v) if current() then w.cfg.imageName=type(v)=="string" and v or "";changed(w,"image") end end),function() return w.cfg.imageMode==2 end)
+        bind(form.addFileField(line("Image file"),nil,"/bitmaps/models","image+ext",function() return current() and w.cfg.imageName or "" end,function(v) if current() then w.cfg.imageName=type(v)=="string" and v or "";changed(w,"image") end end),function() return w.cfg.imageMode==2 end)
     end
     group("Altitude / vario")
     source("altitudeSource","Altitude source","altitude")
@@ -2639,7 +3127,6 @@ local function configure(w)
     group("RX / link")
     source("rxSource","RX voltage");source("txSource","TX voltage");source("rfSource","Link / Rx VFR")
     group("Motor battery")
-    local function motor() return w.cfg.modelType==2 end
     choose("Remaining from","batteryMethod",{{"Consumed mAh",1},{"Percent sensor",2},{"Voltage estimate",3}},nil,motor)
     choose("Chemistry","chemistry",{{"LiPo",1},{"LiHV",2},{"Li-ion",3},{"LiFe",4}},nil,motor)
     number("Capacity","capacityMah",100,100000,"mAh",50,nil,motor)
@@ -2691,9 +3178,14 @@ local function menu(w)
         {"Accept battery...",function() acceptBattery(w) end},
     }
 end
+local function configure(w)
+    return FormLifecycle.configure(w,configureFields,Soar.valid)
+end
 local function destroy(w)
     if not Soar.valid(w) then return end
+    FormLifecycle.release(w)
     if AUDIO_OWNER==w then AUDIO_OWNER=nil end
+    w.sourceFallback,w.sourceReadModel=nil,nil
     w.destroyed=true
     SoarRender.destroy(w)
     w.bitmap=nil;w.history={};w.averageSamples={};w.batteryState=nil
