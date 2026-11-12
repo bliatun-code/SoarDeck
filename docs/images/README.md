@@ -6,6 +6,12 @@ Photo examples use a basic barovario/RX/link setup; motor-glider examples add a 
 
 See the [English walkthrough](../Walkthrough.md), [Norwegian walkthrough](../Bildeguide-norsk.md) and [artwork notices](../../NOTICE.md).
 
-## Sensor setup, 2026.11-v1
+## Sensor setup, 2026.11-v3
 
-The four `sensor-setup-*.png` images were captured again on 4 November 2026 using a clean example model in the native ETHOS 26.2.0 RC2 / X20RS simulator, running 2026.11-v1. They are unretouched 800 × 480 captures. Discovered example sensors illustrate staged suggestions, alternative RF choices and confirmation. No physical sensors were connected. Other images retain their stated original provenance.
+The four `sensor-setup-*.png` images were captured on 13 November 2026 using a clean example model in the native ETHOS 26.2.0 RC2 / X20RS simulator, running 2026.11-v3. They are unretouched 800 × 480 captures. The first shows the top of **Configure widget** with **Advanced settings**. Discovered example sensors illustrate staged suggestions, alternative RF choices and confirmation. No physical sensors were connected. Other images retain their stated original provenance.
+
+## Flight log, motor detection and battery check, 2026.11-v2
+
+`flight-log.png`, `motor-ready.png`, `motor-on.png` and `battery-check-detail.png` are unretouched
+800 × 480 captures from SoarDeck's flight-log build 2026.11-v2 (not released separately) in the ETHOS 26.2.0 RC2 / X20RS simulator. These displays are unchanged in 2026.11-v3.
+They use example telemetry, including a deliberately mismatched pack in the battery dialog.

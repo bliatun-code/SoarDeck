@@ -2,7 +2,7 @@
 
 [Hjem](../README.md) · [Full oppsettsveiledning](Konfigurasjon-norsk.md) · [English](Walkthrough.md)
 
-Bildene viser den faktiske SoarDeck 2026.10-v1 i **ETHOS 26.1.2 / X20RS, 800 × 480**.
+De 16 oppsettseksemplene viser SoarDeck 2026.10-v1 i **ETHOS 26.1.2 / X20RS, 800 × 480**.
 Telemetrien er eksempeldata. Sensorene under beskriver hvordan du kan bygge tilsvarende oppsett; det er ikke målinger fra tilkoblet utstyr.
 Kildenavn kan være endret i ETHOS. Velg riktig måling og enhet, også når flere sensorer tilbyr samme navn.
 
@@ -53,6 +53,34 @@ Start-/nullstillingsregelen må samsvare med batteriet som faktisk er montert. E
 Et nytt batteri trenger først en stabil kontroll med lav strøm. Når appen ber om det, velg **Accept battery...**, kontroller batteri og teller, og trykk Confirm.
 Dialogen gir inntil 60 sekunders lesetid og sjekker ferske data ved Confirm. Reelle endringer eller bortfall kan fortsatt kreve ny kontroll.
 
+### Les batterisjekken
+
+**Accept battery...** forklarer hva du bør sjekke når SoarDeck stopper godkjenningen. I dette
+eksemplet er målt pakkespenning for lav for celletallet som er satt. Sammenlign oppsettet i
+dialogen med det faktiske batteriet før du prøver igjen. [Batterioppsett](Konfigurasjon-norsk.md#konfigurer-motorbatteriet).
+
+![Batterisjekken i SoarDeck viser batterioppsett og målt spenning](images/battery-check-detail.png)
+
+### Motor ready og Motor on
+
+Med **Switch + throttle** vises **Motor ready** når motorbryteren er på. Når gassen passerer den
+valgte grensen, vises **Motor on**. Det skraverte feltet i **Altitude history** markerer
+motorperioden. [Sett opp motorregistrering](Konfigurasjon-norsk.md#motorregistrering-med-bryter-og-gass).
+
+| Bryter på, lav gass | Gass over grensen |
+| --- | --- |
+| ![Motor ready med gassen under grensen](images/motor-ready.png) | ![Motor on med markert motorperiode i høydehistorikken](images/motor-on.png) |
+
+### Se gjennom en flyging
+
+Slå på logging og åpne **Flight log** fra widgetmenyen. Loggen viser flytid og motortid hver for
+seg. Høyde- og variografene får med glidefasen etter motorperioden. Velg **Dashboard** for å gå
+tilbake til instrumentene. [Sett opp flyloggen](Konfigurasjon-norsk.md#flylogg).
+
+![Flyloggen i SoarDeck viser høyde- og variografer etter en motorgliderflyging](images/flight-log.png)
+
+Batteri-, motor- og loggeksemplene over viser flyloggbygget 2026.11-v2 (uendret i 2026.11-v3) i X20RS-simulatoren med eksempeltelemetri.
+
 ## 3. Bare instrumenter og valgfrie fartssensorer
 
 Velg **Model image = Hidden**. Instrumentene overtar bildeområdet, uten et tomt felt.
@@ -75,7 +103,7 @@ Eksemplene bruker **Relative to zero**, **Vario scale ±5 m/s**, **Average perio
 Nullstill høyde på bakken før flyging. Eksempelsekvensen ender på +21,6 m og +1,8 m/s; appen bygger selv gjennomsnitt og historikk fra sekvensen.
 Heron-historikken markerer en kort motorfase først; motoren er AV i sluttbildet.
 Thermal-eksemplene har **History plot = Vario**; de øvrige bruker Altitude der stilen viser historikk.
-Begynn gjerne med **Display damping = Normal (1.5 s)**. Dette endrer visningen, ikke ETHOS-lyden.
+Begynn gjerne med **Display damping = Normal (1.5 s)**. Dette endrer visningen, ikke ETHOS-lyden. Display damping og Average period ligger under **Advanced settings**.
 
 Opprett **Model → Special functions → Play vario**, velg samme native **VSpeed** og en fysisk aktiveringsbryter.
 Juster Range/Center og lyd under **System → General → Vario**. ETHOS-teksten i SoarDeck bekrefter ikke at lyden er aktivert.

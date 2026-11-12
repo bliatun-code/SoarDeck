@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026.11-v3 - 2026-11-13
+
+- Review flight time, altitude, climb and sink in the flight log. Motor gliders also show motor time and battery readings.
+- Use a switch and throttle to show when the motor is ready and mark motor runs in the altitude history.
+- The battery check now explains what to verify when approval is blocked. New setups default to 3S / 2200 mAh and enable the low motor battery alert.
+- SoarDeck loads only for models that use it and frees its memory when you switch to another model. The flight count stays saved; last-flight details are cleared at the switch.
+- Configure widget opens with the everyday settings. Turn on **Advanced settings** and reopen Configure to change damping, timeouts and motor and log thresholds.
+- Less background work while another screen is shown. The package now has two Lua files: `main.lua` loads `deck.lua`. Copy both for manual installation.
+- The flight-log update prepared as 2026.11-v2 was not released separately; it is included here.
+
 ## 2026.11-v1 - 2026-11-04
 
 - Sensor setup helps you select altitude, vario, speed and radio-link sensors.

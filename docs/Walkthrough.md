@@ -2,7 +2,7 @@
 
 [Home](../README.md) · [Full setup guide](Configuration.md) · [Norsk](Bildeguide-norsk.md)
 
-These are native **ETHOS 26.1.2 / X20RS, 800 × 480** simulator screenshots of SoarDeck 2026.10-v1.
+The 16 layout examples show SoarDeck 2026.10-v1 in the **ETHOS 26.1.2 / X20RS, 800 × 480** simulator.
 Values are illustrative, not recorded flights or readings from connected hardware. Select your own discovered sources by measurement and unit;
 names below are examples and can differ on your radio. The model picture does not choose sensors or configure the aircraft.
 
@@ -53,6 +53,34 @@ then select it in SoarDeck. Its start/reset policy must match the battery actual
 After a new pack, allow the initial low-current check. Use **Accept battery...** when requested, check the actual pack and counter, then Confirm.
 The confirmation allows up to 60 seconds of reading time and rechecks fresh inputs. Actual changes or loss can still require another check.
 
+### Read a battery check
+
+**Accept battery...** explains what to check when SoarDeck blocks approval. In this example,
+the measured pack voltage is too low for the configured cell count. Compare the displayed setup
+with the actual pack before trying again. [Battery setup](Configuration.md#set-the-motor-battery).
+
+![SoarDeck battery check showing the configured pack and measured voltage](images/battery-check-detail.png)
+
+### Motor ready and Motor on
+
+With **Switch + throttle**, the armed switch shows **Motor ready**. Raising the throttle past
+the selected threshold shows **Motor on**. The shaded area in **Altitude history** marks the
+motor run. [Set up motor detection](Configuration.md#motor-detection-with-a-switch-and-throttle).
+
+| Switch on, throttle low | Throttle above the threshold |
+| --- | --- |
+| ![Motor ready with throttle below the threshold](images/motor-ready.png) | ![Motor on with a shaded band in altitude history](images/motor-on.png) |
+
+### Review a flight
+
+Enable logging, then open **Flight log** from the widget menu. The log shows the flight and motor
+times separately. The altitude and vario graphs include the glide after the motor run. Choose
+**Dashboard** to return to the instruments. [Flight log setup](Configuration.md#flight-log).
+
+![SoarDeck flight log showing altitude and vario graphs after a motor-glider flight](images/flight-log.png)
+
+The battery, motor and log examples above show the flight-log build 2026.11-v2 (unchanged in 2026.11-v3) on the X20RS simulator with illustrative telemetry.
+
 ## 3. Instrument-only examples: add optional speed measurements
 
 Choose **Model image = Hidden**. Instruments expand into the former picture area; there is no empty image placeholder.
@@ -74,7 +102,7 @@ Pack voltage divided by cell count is not the weakest cell.
 All examples use **Relative to zero**, **Vario scale ±5 m/s**, **Average period 20 s** and **History window 60 s**.
 Zero altitude on the ground before the flight. The example sequence ends at +21.6 m and +1.8 m/s, with real app-generated averages/history from the illustrative sequence.
 The Heron history marks a short initial motor phase; its final motor state is OFF. **Thermal** examples plot vario; the others use altitude history where that style displays it.
-Try **Display damping = Normal (1.5 s)** first; it changes the visual response, not native audio.
+Try **Display damping = Normal (1.5 s)** first; it changes the visual response, not native audio. Display damping and Average period are under **Advanced settings**.
 
 For audio, create **Model → Special functions → Play vario**, select the same native **VSpeed** source and a physical activation switch.
 Set its range/centre and the radio's **System → General → Vario** sound preferences. SoarDeck's ETHOS label is not proof the sound is enabled.

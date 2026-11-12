@@ -1,6 +1,6 @@
 # Configure SoarDeck
 
-**SoarDeck 2026.11-v1** · [Illustrated walkthrough: all 16 layouts](Walkthrough.md)
+**SoarDeck 2026.11-v3** · [Illustrated walkthrough](Walkthrough.md)
 
 [Norsk](Konfigurasjon-norsk.md) · [Overview and installation](../README.md)
 
@@ -30,6 +30,10 @@ and clears the old instrument view. Restore a full-screen area to resume the ins
 If the LCD dimensions are unavailable or invalid, **Screen size unavailable** is shown and the app retries
 at a bounded rate. Telemetry processing, battery qualification, timers, history and alerts continue.
 
+## Advanced settings
+
+**Configure widget** opens with the everyday settings. Turn on **Advanced settings** at the top and reopen Configure to show tuning fields such as damping, timeouts and motor and log thresholds. Hidden fields keep their values and continue to work. The switch returns to OFF after a restart. Fields marked **(Advanced settings)** below appear only when it is on.
+
 ## Sensor setup
 
 Discover the model's sensors in **ETHOS → Telemetry** first. Open **Configure widget → Sensor setup** after choosing **Model type**.
@@ -49,7 +53,7 @@ Sensor setup does not create calculated sensors. If consumed mAh is missing, cre
 <tr><td><img src="images/sensor-setup-choices.png" alt="Choice between matching radio-link sensors"><br><b>Choose between alternatives</b></td><td><img src="images/sensor-setup-confirm.png" alt="Confirmation before saving"><br><b>Confirm before saving</b></td></tr>
 </table>
 
-These new menu captures show SoarDeck 2026.11-v1 in the ETHOS 26.2.0 RC2 X20RS simulator with example sensors. Names and match counts depend on your model.
+These menu captures show SoarDeck 2026.11-v3 in the ETHOS 26.2.0 RC2 X20RS simulator with example sensors. Names and match counts depend on your model.
 
 ## Select altitude and VSpeed
 
@@ -87,7 +91,7 @@ total-energy-compensated or netto lift.
 
 Start with **Vario scale ±5 m/s**, **Display damping Normal (1.5 s)** and **Average period 20 seconds**.
 Choose ±2.5 or ±10 m/s for a narrower/wider display. Damping affects the app's display, not the sensor
-or native ETHOS audio. Average period can be 5, 10, 20 or 30 seconds.
+or native ETHOS audio. Average period can be 5, 10, 20 or 30 seconds. **Display damping**, **Average period** and **Data timeout** are under **Advanced settings**.
 
 **History plot** selects altitude or vario; **History window** selects 30/60 seconds or 2/5 minutes.
 Motor activity is marked separately. History does not locate a thermal. Missing data breaks the
@@ -145,7 +149,7 @@ ETHOS; the app does not invent consumption from motor time or integrate a missin
 For Consumed mAh, each new battery needs **10 continuous seconds** with pack voltage spanning at
 most **0.20 V for the whole pack**, at current no higher than
 `min(1.5 A, max(Idle current floor, 3 × capacity_mAh / 20000))`.
-**Idle current floor** defaults to **0.3 A** and can be increased to **1.5 A** in **0.1 A** steps.
+**Idle current floor** (Advanced settings) defaults to **0.3 A** and can be increased to **1.5 A** in **0.1 A** steps.
 The field is available for Motor glider with Consumed mAh; other measurement methods keep their own behaviour.
 At the default setting, a 450–1500 mAh pack permits up to 0.3 A, while a 3300 mAh pack permits 0.495 A.
 Servo load above the effective limit can still interrupt the check with the motor stopped.
@@ -155,19 +159,24 @@ all other settings; the value is saved with the widget.
 Until accepted, percentage and remaining mAh stay unknown. A worst-case voltage/counter disagreement
 of at most 10 percentage points can be accepted automatically; more than 10 through 20 requires
 **Battery counter → Accept...** after checking actual charge, cells, chemistry, capacity and counter.
-More than 20 cannot be accepted. Excessive voltage requires correcting cells/chemistry. LiFe needs
-manual confirmation because its flat voltage curve cannot reliably verify charge.
+More than 20 cannot be accepted. Open **Accept battery...** from the widget menu to see why a check
+is blocked. For a voltage mismatch, compare the configured pack with the measured voltage and the
+voltage per configured cell. Where available, the dialog compares the counter's remaining charge
+with the voltage estimate. Check the cell count, chemistry, pack-voltage source and counter as
+indicated by the message. LiFe needs manual confirmation because its flat voltage curve cannot
+reliably verify charge.
 
-Manual acceptance requires a known motor OFF state. With a selected motor source, its current
-reading must be valid and at or below **Motor ON above**; otherwise a valid current reading must be below
-**Motor current gate**. The app checks this again when **Confirm** is pressed, so an open dialog
-cannot approve the counter after the motor is armed. Manual acceptance also checks the same effective
+Manual acceptance requires a known motor OFF state. With **Switch + throttle**, turn the motor switch
+off. In **Switch or current**, a selected switch must read at or below **Motor ON above** (Advanced settings). With no
+selected switch in that mode, current must be below **Motor current gate** (Advanced settings). The app checks this
+again when **Confirm** is pressed, so an open dialog cannot approve the counter after the motor is
+armed. Manual acceptance also checks the same effective
 idle-current limit. **Motor current gate** is a separate motor-status setting and does not replace the
 battery-check limit.
 
 Once accepted, normal voltage sag or motor load does not restart the comparison. An unexpected
 consumption-counter decrease makes remaining capacity unknown and needs a fresh check and explicit
-acceptance. **Pack loss delay** defaults to 10 seconds; sustained loss starts a new battery episode.
+acceptance. **Pack loss delay** (Advanced settings) defaults to 10 seconds; sustained loss starts a new battery episode.
 Brief loss gives missing values and does not silently approve a reset. Radio restart requires a new check.
 Stopping the motor and starting a new flight keep battery consumption.
 
@@ -181,19 +190,47 @@ With **Flight timer from → Flight switch / manual**, select **Flight active sw
 **Start flight / End flight** in the widget menu. A selected switch takes precedence over manual control.
 Motor OFF does not end a sailplane flight.
 
-**ETHOS timer** displays the selected radio timer. The flight switch/manual state still defines the app's
-active flight for motor-time accumulation. **Motor active switch** and **Motor ON above** define motor
-status; without a selected motor source, valid current is compared with **Motor current gate**, default 2 A.
-A switch reports a command, not proof that the motor is physically turning.
+**ETHOS timer** displays the selected radio timer. The flight switch or manual state still tells
+SoarDeck when the model is flying, including for flight logging and motor-time tracking.
 
 **New flight → Reset...** clears app flight/motor times, maximum height, height gain, average and history
 while on the ground.
 It keeps battery consumption and the selected altitude reference. Zero altitude separately.
 
+### Motor detection with a switch and throttle
+
+Under **Configure widget → Flight / motor**, set **Motor detection → Switch + throttle**.
+Select **Motor active switch** and **Throttle source**. Use **Motor ON above** to define when
+the switch is on. Set **Throttle low (raw)** and **Throttle high (raw)** to the source readings
+at idle and full throttle, then choose the percentage under **Motor throttle above**.
+These threshold fields are under **Advanced settings**.
+
+**Motor ready** means the switch is on and the throttle is at or below the chosen threshold.
+Above it, SoarDeck shows **Motor on**, adds motor time during the flight and marks the motor run
+in **Altitude history**. Select **History plot → Altitude** under **History / extra fields** to see the
+marking. Motor status describes the selected controls. [Illustrated example](Walkthrough.md#motor-ready-and-motor-on).
+
+## Flight log
+
+1. Open **Configure widget → Flight log** and turn on **Enable log**. Set **Flight minimum**
+   (Advanced settings) to the flight time required to count a flight.
+2. Use **Flight active switch**, or use **Start flight / End flight** from the widget menu if no
+   flight switch is selected. Logging needs a live altitude or VSpeed reading. A telemetry gap
+   pauses counted flight time. Motor OFF leaves the flight running so the glide is included.
+3. Open **Flight log** from the widget menu to see the current or last counted flight. Choose
+   **Dashboard** from the same menu to return to the instruments.
+
+The log shows flight time, altitude and vario graphs, climb and sink, and available speed and link
+readings. Motor gliders also show motor time and available battery readings. **Auto-open log** and
+**Extra log delay** (Advanced settings) let the log open after a counted flight when the widget has focus. The flight
+count is saved per model. Flight details are available until a restart or model change. SoarDeck
+loads only for models that use it and is released again when you switch to a model without it.
+[Illustrated example](Walkthrough.md#review-a-flight).
+
 ## Alerts and preview
 
 Enable **Height alert** and set **Height limit** in metres for the selected altitude reference.
-**Alert repeat** controls repeats for app height/battery warnings; it does not configure native vario beeps.
+**Alert repeat** (Advanced settings) controls repeats for app height/battery warnings; it does not configure native vario beeps.
 
 **Synthetic preview** shows illustrative readings with app alerts, real flight counting and battery
 acceptance disabled. Turn it off for live telemetry, and use the native vario switch separately.
