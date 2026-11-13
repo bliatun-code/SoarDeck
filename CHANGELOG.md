@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.11-v4 - 2026-11-13
+
+- Every sensor choice is saved, also **Throttle source**. Before, the last sources could be lost when many were selected.
+- Settings saved by earlier versions are read correctly. If sources ended up in the wrong place after updating from 2026.11-v1 to 2026.11-v3, select them again in Sensor setup.
+- Opening the widget menu or one of its dialogs no longer keeps SoarDeck in memory after you switch to a model without it.
+- Settings are saved in a new format. Back up the model before returning to 2026.11-v3: that version cannot read them and clears the SoarDeck setup when the model is saved.
+
 ## 2026.11-v3 - 2026-11-13
 
 - Review flight time, altitude, climb and sink in the flight log. Motor gliders also show motor time and battery readings.

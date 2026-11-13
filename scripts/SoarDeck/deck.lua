@@ -37,6 +37,23 @@ function FormLifecycle.buildModel(owner, identity)
     if owner._deckFormBuilding and owner._deckFormReleases then return owner._deckFormModel end
     return identity()
 end
+-- ETHOS can keep menu and dialog functions after they close. Under the small loader
+-- they become relays that let go of this file when it is released. Menu rows reuse
+-- one relay per position; each dialog button gets its own and closes once released.
+function FormLifecycle.relay(list, menu)
+    local relay = FormLifecycle.loader and FormLifecycle.loader.relay
+    if type(relay) == "function" and type(list) == "table" then
+        for index, item in ipairs(list) do
+            if menu then item[2] = relay(item[2], nil, index)
+            else item.action = relay(item.action, true) end
+        end
+    end
+    return list
+end
+function FormLifecycle.openDialog(options)
+    FormLifecycle.relay(options.buttons)
+    return form.openDialog(options)
+end
 function FormLifecycle.configure(owner, build, valid)
     if not valid(owner) then return end
     FormLifecycle.release(owner)
@@ -383,7 +400,7 @@ function SensorSetup.add(owner, panel, rows, current, sourceFor, apply, consumpt
             seen[member]=true
         end
         pending=selections
-        form.openDialog({title="Use sensor suggestions?",message=string.format(
+        FormLifecycle.openDialog({title="Use sensor suggestions?",message=string.format(
             "Save %d selected sources. %s",#selections,methodMessage
                 or "Unavailable sources are replaced only if you chose a replacement."),
             buttons={{label="Cancel",action=function() pending=nil;return true end},
@@ -457,7 +474,7 @@ function SensorSetup.add(owner, panel, rows, current, sourceFor, apply, consumpt
         draft,picks,fields,status,hint,rows,pending,states,owner,methods=nil,nil,nil,nil,nil,nil,nil,nil,nil,nil
     end)
 end
-local VERSION = "2026.11-v3"
+local VERSION = "2026.11-v4"
 local Soar = (function()
     local M = {}
     function M.finite(n) return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
@@ -2841,20 +2858,107 @@ local function create()
     end
     return w
 end
+-- ETHOS keeps widget storage as a list in write order: storage.read ignores the
+-- key and returns the next stored value, and one widget holds at most 256 bytes.
+-- Schema 2: schema, all non-text settings packed in one text, the 17 sources,
+-- then imageName and modelName. Append only: a new setting goes to the end of
+-- DEFAULTS (packed text), anything else after modelName.
+local STORE_LIMIT=256
+local PACKED,SOURCE_NAMES,DEFAULT_NAMES={},{},{}
+for i,d in ipairs(DEFAULTS) do
+    DEFAULT_NAMES[i]=d[1]
+    if type(d[2])~="string" then PACKED[#PACKED+1]=d end
+end
+for i,d in ipairs(SOURCE_DEFS) do SOURCE_NAMES[i]=d[1] end
+-- Schema 1 wrote every setting, then every source:
+-- 2026.10-v1: 32 settings (no idleCurrentFloor), 16 sources;
+-- 2026.10-v2 and 2026.11-v1: 33 settings, 16 sources;
+-- 2026.11-v3: 41 settings, 17 sources.
+local LEGACY_B={}
+for i=1,33 do LEGACY_B[i]=DEFAULT_NAMES[i] end
+local LEGACY_A={}
+for _,name in ipairs(LEGACY_B) do if name~="idleCurrentFloor" then LEGACY_A[#LEGACY_A+1]=name end end
+local function storedSize(v)
+    if v==nil then return 1 end
+    local kind=type(v)
+    if kind=="boolean" then return 2 end
+    if kind=="string" then return 2+#v end
+    if kind=="number" then return (v==math.floor(v) and v>=-2147483648 and v<2147483648) and 5 or 9 end
+    return 5
+end
+local function packNumber(v)
+    if v==math.floor(v) and v>-1e9 and v<1e9 then return string.format("%d",v) end
+    return (string.format("%.4f",v):gsub("0+$",""):gsub("%.$",""))
+end
+local function packSettings(cfg)
+    local parts={}
+    for i,d in ipairs(PACKED) do
+        local v=cfg[d[1]]
+        if type(v)=="boolean" then parts[i]=v and "1" or "0" else parts[i]=packNumber(v) end
+    end
+    return table.concat(parts,",")
+end
+local function unpackSettings(cfg,text)
+    if type(text)~="string" then return end
+    local i=0
+    for item in text:gmatch("[^,]+") do
+        i=i+1
+        local d=PACKED[i]
+        if not d then break end
+        if type(d[2])=="boolean" then
+            if item=="1" then cfg[d[1]]=true elseif item=="0" then cfg[d[1]]=false end
+        else
+            local v=tonumber(item)
+            if v then cfg[d[1]]=v end
+        end
+    end
+end
 local function read(w)
     if not Soar.valid(w) then return end
-    local schema=Soar.call(storage.read,"schema")
-    if schema~=nil and schema~=1 then w.configError="Unsupported settings version";w.readOnly=true;return end
-    -- Schema 1 uses named keys. Its additive extension stays readable by v1;
-    -- an old model without this key explicitly receives the new default.
+    local get=storage.read
+    local schema=Soar.call(get,"schema")
+    if schema~=nil and schema~=1 and schema~=2 then w.configError="Unsupported settings version";w.readOnly=true;return end
+    -- Settings missing from an older layout receive their defaults.
     w.cfg.idleCurrentFloor=0.3
-    for _,d in ipairs(DEFAULTS) do local v=Soar.call(storage.read,d[1]);if v~=nil then w.cfg[d[1]]=v end end
+    local raw={}
+    if schema==2 then
+        unpackSettings(w.cfg,Soar.call(get,"settings"))
+        for _,name in ipairs(SOURCE_NAMES) do raw[name]=Soar.call(get,name) end
+        local image,name=Soar.call(get,"imageName"),Soar.call(get,"modelName")
+        if type(image)=="string" then w.cfg.imageName=image end
+        if type(name)=="string" then w.cfg.modelName=name end
+    else
+        -- Schema 1 (or nothing stored): recognise the layout from value types.
+        -- Position 34 holds modelName (text) unless the layout is 2026.10-v1;
+        -- position 35 holds logEnabled (boolean) only in 2026.11-v3.
+        local values={}
+        for i,name in ipairs(LEGACY_B) do values[i]=Soar.call(get,name) end
+        local names,count,first,firstRead=LEGACY_B,16,nil,true
+        if type(values[33])~="string" then
+            -- 2026.10-v1: position 34 is already the first source.
+            names,first=LEGACY_A,values[33]
+        else
+            local nextValue=Soar.call(get,"logEnabled")
+            if type(nextValue)=="boolean" then
+                -- 2026.11-v3: all settings, then 17 sources.
+                names,count,firstRead=DEFAULT_NAMES,17,false
+                values[34]=nextValue
+                for i=35,#DEFAULT_NAMES do values[i]=Soar.call(get,DEFAULT_NAMES[i]) end
+            else
+                -- 2026.10-v2 and 2026.11-v1: position 35 is the first source.
+                first=nextValue
+            end
+        end
+        for i,name in ipairs(names) do if values[i]~=nil then w.cfg[name]=values[i] end end
+        for i=1,count do
+            local name=SOURCE_NAMES[i]
+            if i==1 and firstRead then raw[name]=first else raw[name]=Soar.call(get,name) end
+        end
+    end
     normalise(w.cfg)
     -- Do not turn an unresolved stored name into a saved explicit None.
-    local raw={}
-    for _,d in ipairs(SOURCE_DEFS) do raw[d[1]]=Soar.call(storage.read,d[1]) end
     local values,retained=SourcePersistence.decode(raw,Soar.restore)
-    for _,d in ipairs(SOURCE_DEFS) do if raw[d[1]]~=nil then w.sources[d[1]]=values[d[1]] end end
+    for _,name in ipairs(SOURCE_NAMES) do if raw[name]~=nil then w.sources[name]=values[name] end end
     w.sourceFallback,w.sourceReadModel=retained,select(1,Soar.modelKey())
     -- A read refreshes runtime state without requesting persistence of defaults.
     changed(w,"read",false)
@@ -2863,9 +2967,23 @@ local function write(w)
     if not Soar.valid(w) or w.readOnly then return end
     normalise(w.cfg)
     local sourceModel=Soar.modelKey()
-    storage.write("schema",1)
-    for _,d in ipairs(DEFAULTS) do storage.write(d[1],w.cfg[d[1]]) end
-    for _,d in ipairs(SOURCE_DEFS) do storage.write(d[1],SourcePersistence.value(w,d[1],w.sources[d[1]],sourceModel)) end
+    local packed,sources=packSettings(w.cfg),{}
+    local size=storedSize(2)+storedSize(packed)
+    for i,name in ipairs(SOURCE_NAMES) do
+        sources[i]=SourcePersistence.value(w,name,w.sources[name],sourceModel)
+        size=size+storedSize(sources[i])
+    end
+    -- Settings and sources always fit; only the names can exceed the limit.
+    local image,name=w.cfg.imageName,w.cfg.modelName
+    if size+storedSize(image)+storedSize(name)>STORE_LIMIT then name="" end
+    if size+storedSize(image)+storedSize(name)>STORE_LIMIT then image="" end
+    w.storageNote=image~=w.cfg.imageName and "Image file name too long to save. Choose a shorter name." or nil
+    storage.write("schema",2)
+    storage.write("settings",packed)
+    -- Every position is written, also an empty source, so later values keep their place.
+    for i,key in ipairs(SOURCE_NAMES) do storage.write(key,sources[i]) end
+    storage.write("imageName",image)
+    storage.write("modelName",name)
 end
 local function imagePath(name)
     if type(name)~="string" then return "" end
@@ -2978,14 +3096,14 @@ local function newFlight(w)
 end
 local function showMessage(message)
     if form and type(form.openDialog)=="function" then
-        form.openDialog({title="SoarDeck",message=message,buttons={{label="OK",action=function() return true end}}})
+        FormLifecycle.openDialog({title="SoarDeck",message=message,buttons={{label="OK",action=function() return true end}}})
     end
 end
 local function confirmAction(w,title,message,action,onCancel)
     if not Soar.valid(w) then return end
     local key,generation=w.modelKey,w.generation
     if type(form.openDialog)~="function" then return end
-    form.openDialog({title=title,message=message,buttons={{label="Cancel",action=function()
+    FormLifecycle.openDialog({title=title,message=message,buttons={{label="Cancel",action=function()
         if onCancel then onCancel() end
         return true
     end},
@@ -3433,6 +3551,7 @@ local function configureFields(w)
     if w.configError then note(w.configError);return end
     local sourceNotice=SourcePersistence.notice(w)
     if sourceNotice then note(sourceNotice) end
+    if w.storageNote then note(w.storageNote) end
     -- Tuning fields are built only on request. Each field adds native callbacks,
     -- and ETHOS 26.1.2 keeps those after Configure closes.
     local advanced=w.showAdvanced==true
@@ -3562,7 +3681,7 @@ end
 local function menu(w)
     if not Soar.valid(w) then return {} end
     SoarBattery.holdForMenu(w.batteryState,batteryConfig(w),Soar.now())
-    return {
+    return FormLifecycle.relay({
         {"Zero altitude...",function() confirmAction(w,"Zero altitude?","Set launch reference while on the ground.",zeroAltitude) end},
         {w.session.manual and "End flight" or "Start flight",function()
             if not Soar.valid(w) or w.cfg.preview or w.sources.flightSource or Soar.modelKey()~=w.modelKey then return end
@@ -3583,7 +3702,7 @@ local function menu(w)
             w.logVisible=not w.logVisible;w.logDue=nil;w.refresh=true;w.nextPoll=0
             Soar.invalidate()
         end},
-    }
+    }, true)
 end
 local function configure(w)
     return FormLifecycle.configure(w,configureFields,Soar.valid)

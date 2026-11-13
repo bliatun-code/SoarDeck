@@ -2,9 +2,9 @@
 
 Sailplane and motor-glider instruments for FrSky ETHOS, in the VoltDeck and GasDeck family.
 
-**SoarDeck 2026.11-v3** · Suite **26.11.3**
+**SoarDeck 2026.11-v4** · Suite **26.11.4**
 
-[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.11-v3/SoarDeck-2026.11-v3.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
+[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.11-v4/SoarDeck-2026.11-v4.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
 
 ![Deck with Multiplex Heron](docs/images/02-deck-heron-photo.png)
 
@@ -29,7 +29,7 @@ Review altitude, climb and sink after a flight. On a motor glider, see motor tim
 
 ## Install
 
-1. Download **SoarDeck-2026.11-v3.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
+1. Download **SoarDeck-2026.11-v4.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
 2. Back up the model and settings. Connect the radio's script storage in FrSky Suite.
 3. Open **Lua library → Install Lua scripts**, select the ZIP and click **Install scripts**.
 4. Restart ETHOS. Add **SoarDeck** to a full-screen widget area and open **Configure widget**.
@@ -38,6 +38,8 @@ Review altitude, climb and sink after a flight. On a motor glider, see motor tim
 For manual installation, copy all six files from the ZIP to `/scripts/SoarDeck/`. `main.lua` only loads `deck.lua`; both files are required. See `INSTALL.txt`.
 
 Configure opens with the everyday settings; turn on **Advanced settings** to show the tuning fields. SoarDeck loads only for models that use it and is released again when you switch to a model without it. The flight count stays saved; last-flight details are cleared at a restart or model switch.
+
+**Updating:** 2026.11-v4 reads settings from earlier versions and saves them in a new format. Check your sources in Configure after updating. Back up the model before going back to 2026.11-v3, which cannot read the new format.
 
 [English setup](docs/Configuration.md) · [Norsk oppsett](docs/Konfigurasjon-norsk.md)
 

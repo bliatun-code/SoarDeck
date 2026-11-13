@@ -1,8 +1,12 @@
 # Configure SoarDeck
 
-**SoarDeck 2026.11-v3** · [Illustrated walkthrough](Walkthrough.md)
+**SoarDeck 2026.11-v4** · [Illustrated walkthrough](Walkthrough.md)
 
 [Norsk](Konfigurasjon-norsk.md) · [Overview and installation](../README.md)
+
+## After updating
+
+SoarDeck 2026.11-v4 reads settings saved by earlier versions and saves them in a new format, so every source fits, including **Throttle source**. Check the sources in Configure after updating; select any that are missing again. Back up the model before returning to 2026.11-v3, which cannot read the new format and clears the SoarDeck setup when the model is saved.
 
 ## Choose the model and view
 
