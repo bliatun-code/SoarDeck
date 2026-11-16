@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible SoarDeck problem on the radio or in the simulator.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: You can report the issue in English or Norwegian.
+  - type: input
+    id: versions
+    attributes:
+      label: Radio model, ETHOS version and SoarDeck version
+      placeholder: "FrSky X20RS / ETHOS 26.1.2 / SoarDeck version"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Physical radio
+        - ETHOS Simulator
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include the relevant altitude, vario, airspeed or motor energy sources and their units. For installation issues, include the FrSky Suite version.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+      description: Include the exact error message if one appeared.
+    validations:
+      required: true
