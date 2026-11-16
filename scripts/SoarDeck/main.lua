@@ -4,7 +4,7 @@
 -- widget of the active model and is released when the model has none. Only a
 -- flight count that cannot be saved yet keeps it loaded. Settings, sources and
 -- alarms are unchanged.
-local VERSION = "2026.11-v4"
+local VERSION = "2026.11-v5"
 local FILE = "SCRIPTS:/SoarDeck/deck.lua"
 local active
 -- A copy that ETHOS still references is reused instead of compiled again.

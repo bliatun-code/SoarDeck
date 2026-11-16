@@ -1,12 +1,12 @@
 # Konfigurere SoarDeck
 
-**SoarDeck 2026.11-v4** · [Bildeguide](Bildeguide-norsk.md)
+**SoarDeck 2026.11-v5** · [Bildeguide](Bildeguide-norsk.md)
 
 [English](Configuration.md) · [Oversikt og installasjon](../README.md)
 
 ## Etter oppdatering
 
-SoarDeck 2026.11-v4 leser innstillinger fra tidligere versjoner og lagrer dem i et nytt format, slik at alle kilder får plass, også **Throttle source**. Kontroller kildene i Configure etter oppdateringen, og velg på nytt de som mangler. Ta backup av modellen før du går tilbake til 2026.11-v3. Den versjonen kan ikke lese det nye formatet og tømmer SoarDeck-oppsettet når modellen lagres.
+SoarDeck 2026.11-v5 leser innstillinger lagret av 2026.11-v4 og tidligere versjoner. Den har fått **Flight start** og lagrer en kopi av oppsettet ved siden av modellen (se [Kopi av oppsettet](#kopi-av-oppsettet)). Ta backup av modellen før du går tilbake til 2026.11-v3. Den versjonen kan ikke lese formatet som er brukt siden 2026.11-v4, og tømmer SoarDeck-oppsettet når modellen lagres. Kontroller kildene i Configure etter oppdatering fra 2026.11-v1 til 2026.11-v3, og velg på nytt de som mangler.
 
 ## Velg modell og visning
 
@@ -193,6 +193,8 @@ Med **Flight timer from → Flight switch / manual** velger du **Flight active s
 **Start flight / End flight** i widgetmenyen. En valgt bryter overstyrer manuell start/stopp.
 Motor OFF avslutter ikke en seilflyging.
 
+**Flight start** (Configure widget → Flight / motor) gjelder når ingen **Flight active switch** er valgt. **Manual** starter og avslutter flygingen med **Start flight / End flight** i widgetmenyen. **Automatic** starter den når motoren går eller modellen er 15 m over null, og avslutter med **End flight** eller når telemetrien har vært borte i **Pack loss delay**. Etter **End flight** i lufta starter ingen ny flyging før modellen har vært nede (under 15 m og motor av). Med flyloggen på og Manual start viser SoarDeck **START FLIGHT TO LOG** når modellen flyr uten startet flyging.
+
 **ETHOS timer** viser valgt radiotimer. Flybryteren eller manuell start/stopp forteller fortsatt
 SoarDeck når modellen flyr, også for flylogg og motortid.
 
@@ -212,6 +214,10 @@ Disse grensefeltene ligger under **Advanced settings**.
 **Motor on**, motortiden teller under flyging, og motorperioden markeres i høydehistorikken.
 Velg **History plot → Altitude** under **History / extra fields** for å se markeringen. Statusen viser
 hva bryteren og gasskilden melder. [Se bildeeksempel](Bildeguide-norsk.md#motor-ready-og-motor-on).
+
+## Kopi av oppsettet
+
+SoarDeck lagrer en kopi av oppsettet i to små filer i `/scripts/` (`sd…a.cfg` og `sd…b.cfg`). Er SoarDeck-oppsettet tomt ved oppstart, for eksempel fordi widgeten er fjernet og lagt inn igjen, hentes kopien tilbake, og skjermen viser **SETUP RESTORED FROM BACKUP** i to minutter. Finnes ikke en kilde lenger i modellen, blir den stående tom, og meldingen er **SETUP RESTORED - CHECK SOURCES**. Kopien hører til modellen, så en ny, tom SoarDeck på en modell som har brukt SoarDeck før, får det gamle oppsettet tilbake. Slett de to filene for å starte helt på nytt. Meldingen kan skjules av **TELEMETRY UNAVAILABLE** mens modellen er av, så kontroller kildene i Configure.
 
 ## Flylogg
 

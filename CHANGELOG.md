@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026.11-v5 - 2026-11-16
+
+- New setting **Flight start** (Configure widget → Flight / motor): **Manual** works as before; **Automatic** starts the flight when the motor runs or the model is 15 m above zero. It applies when no **Flight active switch** is selected.
+- With the flight log on and Manual start, SoarDeck reminds you with **START FLIGHT TO LOG** when the model flies and no flight has been started.
+- A copy of the setup is kept beside the model. If the setup is empty, for example after the widget was removed and added again, it is restored automatically. A source that no longer exists is left empty, and the screen tells you to check the sources.
+- Uses less memory while flying: about 45 to 60 KB less with a full altitude history, measured in the simulator. The screen looks the same on the same ETHOS version.
+
 ## 2026.11-v4 - 2026-11-13
 
 - Every sensor choice is saved, also **Throttle source**. Before, the last sources could be lost when many were selected.

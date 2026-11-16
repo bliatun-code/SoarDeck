@@ -474,7 +474,7 @@ function SensorSetup.add(owner, panel, rows, current, sourceFor, apply, consumpt
         draft,picks,fields,status,hint,rows,pending,states,owner,methods=nil,nil,nil,nil,nil,nil,nil,nil,nil,nil
     end)
 end
-local VERSION = "2026.11-v4"
+local VERSION = "2026.11-v5"
 local Soar = (function()
     local M = {}
     function M.finite(n) return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
@@ -2159,6 +2159,9 @@ local SoarRender = (function()
     local function prepareViewports(widget,width,height)
         local known=finite(width)and finite(height)and width>0 and height>0
         local w,h=known and floor(width)or 800,known and floor(height)or 480
+        -- Once paint has reported the real window, only that viewport is prepared.
+        -- Before that, both design sizes are kept ready for the first frame.
+        if known then return w,h,w,h end
         local sw,sh=w==480 and h==320 and 800 or 480,w==480 and h==320 and 480 or 320
         return w,h,sw,sh
     end
@@ -2174,8 +2177,10 @@ local SoarRender = (function()
                 cfg.showAirspeed==true and 1 or 0,scale,w,h,sw,sh},"/")
             if widget._soarDialKey~=key then
                 local a=prepareDial({cfg=cfg},w,h)
-                local b=prepareDial({cfg=cfg},sw,sh)
-                for k,v in pairs(b)do a[k]=v end
+                if sw~=w or sh~=h then
+                    local b=prepareDial({cfg=cfg},sw,sh)
+                    for k,v in pairs(b)do a[k]=v end
+                end
                 if configMatches(cfg,widget)then widget._soarDialGeometry,widget._soarDialKey=a,key end
             end
             widget._soarGraphProjections=nil;return
@@ -2187,7 +2192,7 @@ local SoarRender = (function()
         local label=(widget.data or{}).altitudeLabel
         local a=projection(widget,cfg,w,h,prior[first],widget._soarGraphInput,label)
         if not a then return end
-        local b=projection(widget,cfg,sw,sh,prior[second],a.input,label)
+        local b=second==first and a or projection(widget,cfg,sw,sh,prior[second],a.input,label)
         if not b then return end
         -- Both exact viewports publish together only after the full finite job.
         -- Paint still rechecks actual window/config/history before using either.
@@ -2377,7 +2382,7 @@ local SoarRender = (function()
             and(not initial or prior["784/316"])and renderMatches(prior.snapshot,widget)then return end
         local snapshot=renderSnapshot(widget)
         local a=buildRenderPlan(widget,snapshot,w,h,prior and prior[first])
-        local b=buildRenderPlan(widget,snapshot,sw,sh,prior and prior[second])
+        local b=second==first and a or buildRenderPlan(widget,snapshot,sw,sh,prior and prior[second])
         -- The third INITIAL plan covers the ordinary Home window actually
         -- observed on ETHOS/X20 in this project. Once paint reports its actual
         -- window, retain only that exact viewport plus the compact design view.
@@ -2801,6 +2806,7 @@ local DEFAULTS = {
     {"logEnabled",false},{"flightMinimum",60,10,3600},{"autoLogEnabled",false},{"autoLogDelay",5,0,120},
     {"motorMode",1,1,2},{"throttleLow",-1024,-2048,2048},{"throttleHigh",1024,-2048,2048},
     {"throttleGate",10,1,99},
+    {"flightStart",1,1,2},
 }
 local SOURCE_DEFS = {
     {"altitudeSource","Altitude","altitude"},{"varioSource","VSpeed","vario"},
@@ -2813,6 +2819,7 @@ local SOURCE_DEFS = {
     {"percentSource","Battery % source","percent"},{"cellMinSource","Lowest cell voltage","voltage"},
     {"throttleSource","Throttle source","control"},
 }
+local AUTO_LAUNCH=15
 local IMAGE_CACHE=setmetatable({},{__mode="v"})
 local AUDIO_OWNER
 local function normalise(cfg)
@@ -2823,10 +2830,50 @@ local function normalise(cfg)
         if type(v)=="string" then v=v:sub(1,256) end
         cfg[d[1]]=v
     end
-    for _,key in ipairs({"style","modelType","imageMode","unitMode","altitudeMode","historyKind","chemistry","cellCount","capacityMah","batteryMethod","timerMode","motorMode"}) do cfg[key]=math.floor(cfg[key]) end
+    for _,key in ipairs({"style","modelType","imageMode","unitMode","altitudeMode","historyKind","chemistry","cellCount","capacityMah","batteryMethod","timerMode","motorMode","flightStart"}) do cfg[key]=math.floor(cfg[key]) end
+end
+-- Vario average: sample times and values as two number lists with running sums,
+-- so a poll adds one segment instead of walking every sample.
+local function resetAverage(w)
+    w.avgTimes,w.avgValues,w.avgIntegral,w.avgDuration,w.avgSegments,w.avgDrops,w.avgFresh={},{},0,0,0,0,nil
+end
+local function sumAverage(w,fresh)
+    local times,values,integral,duration,segments=w.avgTimes,w.avgValues,0,0,0
+    for i=2,#times do
+        local span=times[i]-times[i-1]
+        if span>0 and span<=fresh then integral=integral+(values[i]+values[i-1])*0.5*span;duration=duration+span;segments=segments+1 end
+    end
+    w.avgIntegral,w.avgDuration,w.avgSegments,w.avgDrops,w.avgFresh=integral,duration,segments,0,fresh
+end
+-- Time-weighted average over avgSeconds, never across a telemetry gap.
+local function average(w,now,vario,cfg)
+    if not vario then resetAverage(w);return nil end
+    local times,values,fresh=w.avgTimes,w.avgValues,cfg.freshSeconds
+    if w.avgFresh~=fresh then sumAverage(w,fresh) end
+    local n=#times
+    if n>0 then
+        local span=now-times[n]
+        if span>0 and span<=fresh then
+            w.avgIntegral=w.avgIntegral+(vario+values[n])*0.5*span;w.avgDuration=w.avgDuration+span;w.avgSegments=w.avgSegments+1
+        end
+    end
+    times[n+1],values[n+1]=now,vario
+    while #times>0 and (now-times[1]>cfg.avgSeconds or #times>601) do
+        if #times>1 then
+            local span=times[2]-times[1]
+            if span>0 and span<=fresh then
+                w.avgIntegral=w.avgIntegral-(values[2]+values[1])*0.5*span;w.avgDuration=w.avgDuration-span;w.avgSegments=w.avgSegments-1
+            end
+        end
+        table.remove(times,1);table.remove(values,1);w.avgDrops=w.avgDrops+1
+    end
+    -- Exact sums again after many removals, and exact zero without segments.
+    if w.avgDrops>=256 then sumAverage(w,fresh) end
+    if w.avgSegments<=0 then w.avgIntegral,w.avgDuration,w.avgSegments=0,0,0 end
+    if w.avgDuration>0 then return w.avgIntegral/w.avgDuration end
 end
 local function resetSamples(w)
-    w.filter=nil; w.altSample=nil; w.averageSamples={};w.history={};w.lastHistory=nil
+    w.filter=nil; w.altSample=nil; w.history={};w.lastHistory=nil;resetAverage(w)
     w.data.vario,w.data.average=nil,nil
 end
 local function changed(w,kind,markDirty)
@@ -2844,12 +2891,15 @@ local function changed(w,kind,markDirty)
         w.logVisible=nil
     end
     if kind=="auto-log" and not w.cfg.autoLogEnabled then w.logDue=nil end
-    if markDirty~=false then Soar.dirty() end
+    if markDirty~=false then
+        if kind~="read" then w.backupReady=true end
+        Soar.dirty()
+    end
     Soar.invalidate()
 end
 local function create()
     local key,name=Soar.modelKey()
-    local w={cfg={},sources={},data={modelName=name,flightTime=0,motorTime=0},history={},averageSamples={},
+    local w={cfg={},sources={},data={modelName=name,flightTime=0,motorTime=0},history={},avgTimes={},avgValues={},avgIntegral=0,avgDuration=0,avgSegments=0,avgDrops=0,
         generation=1,configGeneration=0,nextPoll=0,nextImage=0,refresh=true,modelKey=key,
         batteryState=SoarBattery.new(),session={flightTime=0,motorTime=0},alerts={},sourceErrors={}}
     normalise(w.cfg)
@@ -2876,6 +2926,8 @@ for i,d in ipairs(SOURCE_DEFS) do SOURCE_NAMES[i]=d[1] end
 -- 2026.11-v3: 41 settings, 17 sources.
 local LEGACY_B={}
 for i=1,33 do LEGACY_B[i]=DEFAULT_NAMES[i] end
+local LEGACY_C={}
+for i=1,41 do LEGACY_C[i]=DEFAULT_NAMES[i] end
 local LEGACY_A={}
 for _,name in ipairs(LEGACY_B) do if name~="idleCurrentFloor" then LEGACY_A[#LEGACY_A+1]=name end end
 local function storedSize(v)
@@ -2913,15 +2965,123 @@ local function unpackSettings(cfg,text)
         end
     end
 end
+-- Setup backup beside the model. ETHOS can leave a widget's stored block empty
+-- after Lua has been stopped, so the last saved setup is also kept in two
+-- alternating files. A source is kept as category, member and options, and is
+-- used again only when the recreated source still has the same name.
+local SetupBackup=(function()
+    local M={}
+    local function checksum(bytes)
+        local hash=5381
+        for i=1,#bytes do hash=(hash*33.0+bytes:byte(i))%2147483647 end
+        return math.floor(hash)
+    end
+    local function hex(text) return (text:gsub(".",function(c) return string.format("%02x",c:byte()) end)) end
+    local function unhex(text) return (text:gsub("%x%x",function(h) return string.char(tonumber(h,16)) end)) end
+    local function usable(key) return type(key)=="string" and key~="" and #key<=512 end
+    local function base(key) return "/scripts/sd"..string.format("%08x",checksum(key)) end
+    local function slot(path)
+        local file=Soar.call(io.open,path,"rb")
+        if not file then return nil end
+        local bytes=Soar.call(io.read,file,4096)
+        Soar.call(io.close,file)
+        return type(bytes)=="string" and bytes or ""
+    end
+    local function parse(bytes,identity,suffix)
+        if not bytes then return nil end
+        local body,id,sequence,content,check=bytes:match("^(SS1|(%x+)|(%d+)|(.*|))(%d+)\n$")
+        if not body or tonumber(check)~=checksum(body) or id~=identity then return nil end
+        sequence=tonumber(sequence)
+        if not sequence or sequence<1 or sequence>1000000000 or (sequence%2==1 and "a.cfg" or "b.cfg")~=suffix then return nil end
+        local settings,image,name,sources=content:match("^([^|]*)|(%x*)|(%x*)|([^|]*)|$")
+        if not settings then return nil end
+        return {sequence=sequence,content=content,settings=settings,image=unhex(image),name=unhex(name),sources=sources}
+    end
+    -- Newest valid copy for this model, or nil.
+    function M.load(key)
+        if not usable(key) then return nil end
+        local identity,path,best=hex(key),base(key),nil
+        for _,suffix in ipairs({"a.cfg","b.cfg"}) do
+            local item=parse(slot(path..suffix),identity,suffix)
+            if item and (not best or item.sequence>best.sequence) then best=item end
+        end
+        M.cache={key=key,sequence=best and best.sequence or 0,content=best and best.content or nil}
+        return best
+    end
+    local function identityOf(source) return source:category(),source:member(),source:options(),source:name() end
+    function M.save(w,settings,image,name)
+        local key=w.modelKey
+        if not usable(key) then return false end
+        local parts={}
+        for i,sourceName in ipairs(SOURCE_NAMES) do
+            local source,item=w.sources[sourceName],""
+            if source then
+                local ok,category,member,options,label=pcall(identityOf,source)
+                if ok and type(category)=="number" and type(member)=="number" and type(label)=="string" then
+                    item=string.format("%d,%d,%d,%s",category,member,type(options)=="number" and options or 0,hex(label))
+                end
+            end
+            parts[i]=item
+        end
+        local content=settings.."|"..hex(image).."|"..hex(name).."|"..table.concat(parts,";").."|"
+        local cache=M.cache
+        if not cache or cache.key~=key then M.load(key);cache=M.cache end
+        if cache.content==content then return true end
+        local sequence=cache.sequence+1
+        local body="SS1|"..hex(key).."|"..sequence.."|"..content
+        local bytes=body..checksum(body).."\n"
+        local path=base(key)..(sequence%2==1 and "a.cfg" or "b.cfg")
+        local file=Soar.call(io.open,path,"w")
+        if not file then return false end
+        local wrote=pcall(io.write,file,bytes)
+        local closed=pcall(io.close,file)
+        if wrote and closed and slot(path)==bytes then
+            M.cache={key=key,sequence=sequence,content=content}
+            return true
+        end
+        return false
+    end
+    -- Fills an empty widget from the newest copy. Returns the number of sources
+    -- that are no longer in the model, or nil when there is no copy.
+    function M.restore(w)
+        local backup=M.load(w.modelKey)
+        if not backup then return nil end
+        unpackSettings(w.cfg,backup.settings)
+        w.cfg.imageName,w.cfg.modelName=backup.image,backup.name
+        local index,missing=0,0
+        for item in (backup.sources..";"):gmatch("([^;]*);") do
+            index=index+1
+            local sourceName=SOURCE_NAMES[index]
+            if not sourceName then break end
+            if item~="" then
+                local category,member,options,label=item:match("^(%d+),(%d+),(%d+),(%x*)$")
+                local source=category and Soar.selected(Soar.call(system.getSource,
+                    {category=tonumber(category),member=tonumber(member),options=tonumber(options)}))
+                local ok,_,_,_,current=pcall(identityOf,source)
+                if source and ok and current==unhex(label) then
+                    w.sources[sourceName]=source
+                else missing=missing+1 end
+            else w.sources[sourceName]=nil end
+        end
+        return missing
+    end
+    return M
+end)()
 local function read(w)
     if not Soar.valid(w) then return end
+    w.readDone=true
     local get=storage.read
     local schema=Soar.call(get,"schema")
     if schema~=nil and schema~=1 and schema~=2 then w.configError="Unsupported settings version";w.readOnly=true;return end
     -- Settings missing from an older layout receive their defaults.
     w.cfg.idleCurrentFloor=0.3
     local raw={}
-    if schema==2 then
+    -- Nothing stored: use the copy beside the model when there is one.
+    local missing
+    if schema==nil then missing=SetupBackup.restore(w) end
+    if missing then
+        w.restored={at=Soar.now(),missing=missing}
+    elseif schema==2 then
         unpackSettings(w.cfg,Soar.call(get,"settings"))
         for _,name in ipairs(SOURCE_NAMES) do raw[name]=Soar.call(get,name) end
         local image,name=Soar.call(get,"imageName"),Soar.call(get,"modelName")
@@ -2940,10 +3100,10 @@ local function read(w)
         else
             local nextValue=Soar.call(get,"logEnabled")
             if type(nextValue)=="boolean" then
-                -- 2026.11-v3: all settings, then 17 sources.
-                names,count,firstRead=DEFAULT_NAMES,17,false
+                -- 2026.11-v3: 41 settings, then 17 sources.
+                names,count,firstRead=LEGACY_C,17,false
                 values[34]=nextValue
-                for i=35,#DEFAULT_NAMES do values[i]=Soar.call(get,DEFAULT_NAMES[i]) end
+                for i=35,#LEGACY_C do values[i]=Soar.call(get,LEGACY_C[i]) end
             else
                 -- 2026.10-v2 and 2026.11-v1: position 35 is the first source.
                 first=nextValue
@@ -2960,8 +3120,26 @@ local function read(w)
     local values,retained=SourcePersistence.decode(raw,Soar.restore)
     for _,name in ipairs(SOURCE_NAMES) do if raw[name]~=nil then w.sources[name]=values[name] end end
     w.sourceFallback,w.sourceReadModel=retained,select(1,Soar.modelKey())
+    -- The copy is written only for a setup that was stored, restored or changed here.
+    w.backupReady=schema~=nil or missing~=nil or nil
     -- A read refreshes runtime state without requesting persistence of defaults.
-    changed(w,"read",false)
+    -- A restored setup is saved back to the model.
+    changed(w,"read",missing~=nil)
+end
+-- ETHOS does not call read for a widget that has nothing stored, so a widget put
+-- back on the screen starts here without a read. The copy is used before anything
+-- else can mark the defaults as a setup worth saving.
+local function restoreUnread(w)
+    if w.readDone then return end
+    w.readDone=true
+    if w.readOnly or w.backupReady then return end
+    local missing=SetupBackup.restore(w)
+    if not missing then return end
+    w.cfg.idleCurrentFloor=w.cfg.idleCurrentFloor or 0.3
+    normalise(w.cfg)
+    w.restored={at=Soar.now(),missing=missing}
+    w.backupReady=true
+    changed(w,"read",true)
 end
 local function write(w)
     if not Soar.valid(w) or w.readOnly then return end
@@ -2984,6 +3162,7 @@ local function write(w)
     for i,key in ipairs(SOURCE_NAMES) do storage.write(key,sources[i]) end
     storage.write("imageName",image)
     storage.write("modelName",name)
+    w.backupPending=true
 end
 local function imagePath(name)
     if type(name)~="string" then return "" end
@@ -3053,7 +3232,7 @@ end
 local function groundSafe(w)
     if w.cfg.preview then return false,"Turn off synthetic preview first." end
     local generation=w.generation
-    if w.session.manual and not w.sources.flightSource then return false,"End the flight before resetting altitude." end
+    if (w.session.manual or w.session.auto) and not w.sources.flightSource then return false,"End the flight before resetting altitude." end
     if w.sources.flightSource then
         local flight=Soar.sample(w.sources.flightSource,"control",w.cfg.freshSeconds)
         if flight==nil then return false,"Flight switch state is unknown." end
@@ -3223,9 +3402,15 @@ local function poll(w,now)
         FormLifecycle.modelChanged(w,key)
         -- A reused callback must not carry another model's source selections/session.
         w.sourceFallback,w.sourceReadModel=nil,nil
+        -- These defaults are not this model's setup: they must not replace its copy.
+        w.backupReady,w.backupPending,w.restored,w.readDone=nil,nil,nil,nil
         w.modelKey=key;w.sources={};w.cfg={};normalise(w.cfg)
         w.batteryState=SoarBattery.new();w.session={flightTime=0,motorTime=0};resetSamples(w)
         w.data={modelName=name};w.generation=w.generation+1;return
+    end
+    if w.backupPending and w.backupReady then
+        w.backupPending=nil
+        if not w.readOnly then SetupBackup.save(w,packSettings(w.cfg),w.cfg.imageName,w.cfg.modelName) end
     end
     local values,errors,units={},{},{}
     for _,d in ipairs(SOURCE_DEFS) do
@@ -3237,9 +3422,9 @@ local function poll(w,now)
         if dt<0 then w.history={};w.lastHistory=nil
         elseif w.lastPoll then
             local gapTime=w.lastPoll+math.min(1,dt/2)
-            w.history[#w.history+1]={x=gapTime,time=gapTime,valid=false,motor=false}
+            w.history[#w.history+1]={x=gapTime,valid=false}
         end
-        dt=0;w.altSample=nil;w.filter=nil;w.averageSamples={}
+        dt=0;w.altSample=nil;w.filter=nil;resetAverage(w)
     end
     w.lastPoll=now
     local cfg=w.cfg
@@ -3271,6 +3456,11 @@ local function poll(w,now)
     end
     data.altitudeLabel=cfg.altitudeMode==1 and "ALT REL" or "ALT SENSOR"
     if rawAltitude and cfg.altitudeMode==1 and not cfg.zeroReady then data.message="ZERO ALTITUDE BEFORE FLIGHT" end
+    local restored=w.restored
+    if restored then
+        if now<restored.at or now-restored.at>=120 then w.restored=nil
+        elseif not data.message then data.message=restored.missing>0 and "SETUP RESTORED - CHECK SOURCES" or "SETUP RESTORED FROM BACKUP" end
+    end
     local motor=values.motorSource
     data.motorKnown=cfg.modelType==1 or motor~=nil or (not w.sources.motorSource and values.currentSource~=nil)
     data.motorActive=cfg.modelType==2 and ((motor~=nil and motor>cfg.motorThreshold)
@@ -3290,21 +3480,37 @@ local function poll(w,now)
     end
     local flight=values.flightSource
     data.flightKnown=not w.sources.flightSource or flight~=nil
-    local active=w.sources.flightSource and flight~=nil and flight>0 or (not w.sources.flightSource and w.session.manual==true)
-    w.session.active=active
+    -- Without a flight switch the flight is started by hand, or by itself when
+    -- Flight start is Automatic: motor running or AUTO_LAUNCH metres of height.
+    local session=w.session
+    local flying=data.live and (data.motorActive==true or ((cfg.altitudeMode==1 and data.altitude or data.gain) or 0)>=AUTO_LAUNCH)
+    if w.sources.flightSource or cfg.flightStart~=2 then
+        session.auto,session.autoHold,session.lostSince=nil,nil,nil
+    elseif session.auto then
+        -- An automatic flight ends with End flight, or when telemetry stays away.
+        if data.live then session.lostSince=nil
+        else
+            if not session.lostSince or now<session.lostSince then session.lostSince=now end
+            if now-session.lostSince>=cfg.endDelay then session.auto,session.lostSince=nil,nil end
+        end
+    elseif not flying then session.autoHold=nil
+    elseif not session.autoHold and not session.manual then session.auto=true end
+    local active=w.sources.flightSource and flight~=nil and flight>0
+        or (not w.sources.flightSource and (session.manual==true or session.auto==true))
+    session.active=active
+    if flying and not active and not w.sources.flightSource and cfg.logEnabled and not data.message then
+        data.message="START FLIGHT TO LOG"
+    end
     if active and data.live and dt>0 then w.session.flightTime=w.session.flightTime+dt end
     if active and data.live and data.motorActive and dt>0 then w.session.motorTime=w.session.motorTime+dt end
     data.flightTime=cfg.timerMode==2 and values.timerSource or w.session.flightTime
     data.motorTime=w.session.motorTime
-    local avg=w.averageSamples
-    if data.vario then avg[#avg+1]={time=now,value=data.vario} else avg={};w.averageSamples=avg end
-    while #avg>0 and (now-avg[1].time>cfg.avgSeconds or #avg>601) do table.remove(avg,1) end
-    -- Time-weighted integration, no averaging across a telemetry gap.
-    local integral,duration=0,0
-    for i=2,#avg do local span=avg[i].time-avg[i-1].time;if span>0 and span<=cfg.freshSeconds then integral=integral+(avg[i].value+avg[i-1].value)*0.5*span;duration=duration+span end end
-    if duration>0 then data.average=integral/duration end
+    data.average=average(w,now,data.vario,cfg)
     if not w.lastHistory or now<w.lastHistory or now-w.lastHistory>=1 then
-        w.history[#w.history+1]={x=now,time=now,altitude=data.altitude,vario=data.vario,motor=data.motorActive,valid=data.live}
+        -- Four fields keep a point small; motor is added only while the motor runs.
+        local point={x=now,altitude=data.altitude,vario=data.vario,valid=data.live}
+        if data.motorActive then point.motor=true end
+        w.history[#w.history+1]=point
         w.lastHistory=now
     end
     while #w.history>301 or (#w.history>0 and now-w.history[1].x>300) do table.remove(w.history,1) end
@@ -3333,7 +3539,7 @@ local function preview(w,now)
         altitudeLabel="ALT REL",battery={percent=68,remaining=2244,consumed=1056,voltage=22.8,current=0,cellMin=3.78,
             method=w.cfg.batteryMethod,status=w.cfg.batteryMethod==3 and "estimate" or "accepted",valid=true}}
     if #w.history==0 then
-        for i=0,120 do local t=now-120+i;w.history[#w.history+1]={x=t,time=t,altitude=150+i*1.35+12*math.sin(i/14),vario=1.2+0.7*math.sin(i/7),motor=i>15 and i<35,valid=true} end
+        for i=0,120 do local t=now-120+i;local point={x=t,altitude=150+i*1.35+12*math.sin(i/14),vario=1.2+0.7*math.sin(i/7),valid=true};if i>15 and i<35 then point.motor=true end;w.history[#w.history+1]=point end
     end
     w.lastPoll=now
 end
@@ -3455,6 +3661,8 @@ local function wakeup(w)
     local now=Soar.now()
     if now<w.nextPoll and (not w.lastClock or now>=w.lastClock) then return end
     w.lastClock=now;w.nextPoll=now+0.1
+    restoreUnread(w)
+    if not Soar.valid(w) then return end
     if w.cfg.preview then preview(w,now) else poll(w,now) end
     if not Soar.valid(w) then return end
     updateImage(w,now);alarms(w,now)
@@ -3552,6 +3760,7 @@ local function configureFields(w)
     local sourceNotice=SourcePersistence.notice(w)
     if sourceNotice then note(sourceNotice) end
     if w.storageNote then note(w.storageNote) end
+    if w.restored then note(w.restored.missing>0 and "Setup restored from backup. Check the sources." or "Setup restored from backup.") end
     -- Tuning fields are built only on request. Each field adds native callbacks,
     -- and ETHOS 26.1.2 keeps those after Configure closes.
     local advanced=w.showAdvanced==true
@@ -3633,6 +3842,7 @@ local function configureFields(w)
     choose("Flight timer from","timerMode",{{"Flight switch / manual",1},{"ETHOS timer",2}})
     source("timerSource","ETHOS timer",nil,function() return w.cfg.timerMode==2 end)
     source("flightSource","Flight active switch")
+    choose("Flight start","flightStart",{{"Manual",1},{"Automatic",2}},nil,function() return not w.sources.flightSource end)
     choose("Motor detection","motorMode",{{"Switch or current",1},{"Switch + throttle",2}},nil,motor)
     local function throttleMode() return motor() and w.cfg.motorMode==2 end
     source("motorSource","Motor active switch",nil,motor)
@@ -3683,9 +3893,16 @@ local function menu(w)
     SoarBattery.holdForMenu(w.batteryState,batteryConfig(w),Soar.now())
     return FormLifecycle.relay({
         {"Zero altitude...",function() confirmAction(w,"Zero altitude?","Set launch reference while on the ground.",zeroAltitude) end},
-        {w.session.manual and "End flight" or "Start flight",function()
+        {(w.session.manual or w.session.auto) and "End flight" or "Start flight",function()
             if not Soar.valid(w) or w.cfg.preview or w.sources.flightSource or Soar.modelKey()~=w.modelKey then return end
-            w.session.manual=not w.session.manual;w.session.active=w.session.manual;w.lastPoll=Soar.now()
+            if w.session.auto then
+                -- Ended by hand: no new automatic flight until the model has landed.
+                w.session.auto,w.session.autoHold,w.session.manual=nil,true,false
+            else
+                w.session.manual=not w.session.manual
+                if not w.session.manual then w.session.autoHold=true end
+            end
+            w.session.active=w.session.manual;w.lastPoll=Soar.now()
             if not w.session.manual and w.cfg.logEnabled and not w.readOnly and Soar.modelKey()==w.modelKey then
                 SoarFlightLog.update(w,{flightKnown=true},false,w.lastPoll,0)
             end
@@ -3715,7 +3932,7 @@ local function destroy(w)
     w.sourceFallback,w.sourceReadModel=nil,nil
     w.destroyed=true
     SoarRender.destroy(w)
-    w.bitmap=nil;w.history={};w.averageSamples={};w.batteryState=nil
+    w.bitmap=nil;w.history={};resetAverage(w);w.batteryState=nil
     w.configGeneration=w.configGeneration+1
 end
 local function event(w,category,value)

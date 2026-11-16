@@ -2,9 +2,9 @@
 
 Sailplane and motor-glider instruments for FrSky ETHOS, in the VoltDeck and GasDeck family.
 
-**SoarDeck 2026.11-v4** · Suite **26.11.4**
+**SoarDeck 2026.11-v5** · Suite **26.11.5**
 
-[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.11-v4/SoarDeck-2026.11-v4.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
+[Download the release ZIP](https://github.com/bliatun-code/SoarDeck/releases/download/soardeck-2026.11-v5/SoarDeck-2026.11-v5.zip) · [Illustrated walkthrough](docs/Walkthrough.md) · [Norsk bildeguide](docs/Bildeguide-norsk.md)
 
 ![Deck with Multiplex Heron](docs/images/02-deck-heron-photo.png)
 
@@ -29,7 +29,7 @@ Review altitude, climb and sink after a flight. On a motor glider, see motor tim
 
 ## Install
 
-1. Download **SoarDeck-2026.11-v4.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
+1. Download **SoarDeck-2026.11-v5.zip** from [Releases](https://github.com/bliatun-code/SoarDeck/releases/latest).
 2. Back up the model and settings. Connect the radio's script storage in FrSky Suite.
 3. Open **Lua library → Install Lua scripts**, select the ZIP and click **Install scripts**.
 4. Restart ETHOS. Add **SoarDeck** to a full-screen widget area and open **Configure widget**.
@@ -39,13 +39,13 @@ For manual installation, copy all six files from the ZIP to `/scripts/SoarDeck/`
 
 Configure opens with the everyday settings; turn on **Advanced settings** to show the tuning fields. SoarDeck loads only for models that use it and is released again when you switch to a model without it. The flight count stays saved; last-flight details are cleared at a restart or model switch.
 
-**Updating:** 2026.11-v4 reads settings from earlier versions and saves them in a new format. Check your sources in Configure after updating. Back up the model before going back to 2026.11-v3, which cannot read the new format.
+**Updating:** 2026.11-v5 reads settings saved by 2026.11-v4 and earlier versions unchanged. It adds **Flight start** (Manual or Automatic) and keeps a copy of the setup beside the model: if the SoarDeck setup is empty, for example after you removed the widget by mistake and added it again, the copy is restored automatically. Back up the model before going back to 2026.11-v3, which cannot read the format used since 2026.11-v4.
 
 [English setup](docs/Configuration.md) · [Norsk oppsett](docs/Konfigurasjon-norsk.md)
 
 ## Compatibility
 
-Simulator coverage includes X20RS on ETHOS **1.6.6**, **26.1.2** and **26.2.0-RC2**.
+Simulator coverage includes X20RS on ETHOS **1.6.6**, **26.1.2** and **26.2.0**.
 RC coverage is exploratory. Check the actual sources, units and behaviour on your radio/model combination.
 
 ## Deck family

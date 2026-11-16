@@ -1,12 +1,12 @@
 # Configure SoarDeck
 
-**SoarDeck 2026.11-v4** · [Illustrated walkthrough](Walkthrough.md)
+**SoarDeck 2026.11-v5** · [Illustrated walkthrough](Walkthrough.md)
 
 [Norsk](Konfigurasjon-norsk.md) · [Overview and installation](../README.md)
 
 ## After updating
 
-SoarDeck 2026.11-v4 reads settings saved by earlier versions and saves them in a new format, so every source fits, including **Throttle source**. Check the sources in Configure after updating; select any that are missing again. Back up the model before returning to 2026.11-v3, which cannot read the new format and clears the SoarDeck setup when the model is saved.
+SoarDeck 2026.11-v5 reads settings saved by 2026.11-v4 and earlier versions. It adds **Flight start** and keeps a copy of the setup beside the model (see [Setup copy](#setup-copy)). Back up the model before returning to 2026.11-v3, which cannot read the format used since 2026.11-v4 and clears the SoarDeck setup when the model is saved. Check the sources in Configure after updating from 2026.11-v1 to 2026.11-v3; select any that are missing again.
 
 ## Choose the model and view
 
@@ -194,6 +194,8 @@ With **Flight timer from → Flight switch / manual**, select **Flight active sw
 **Start flight / End flight** in the widget menu. A selected switch takes precedence over manual control.
 Motor OFF does not end a sailplane flight.
 
+**Flight start** (Configure widget → Flight / motor) applies when no **Flight active switch** is selected. **Manual** starts and ends the flight with **Start flight / End flight** in the widget menu. **Automatic** starts it when the motor runs or the model is 15 m above zero, and ends it with **End flight** or when telemetry has been missing for the **Pack loss delay**. After **End flight** in the air, no new flight starts until the model has been down (below 15 m and motor off). With the flight log on and Manual start, SoarDeck shows **START FLIGHT TO LOG** when the model flies without a started flight.
+
 **ETHOS timer** displays the selected radio timer. The flight switch or manual state still tells
 SoarDeck when the model is flying, including for flight logging and motor-time tracking.
 
@@ -213,6 +215,10 @@ These threshold fields are under **Advanced settings**.
 Above it, SoarDeck shows **Motor on**, adds motor time during the flight and marks the motor run
 in **Altitude history**. Select **History plot → Altitude** under **History / extra fields** to see the
 marking. Motor status describes the selected controls. [Illustrated example](Walkthrough.md#motor-ready-and-motor-on).
+
+## Setup copy
+
+SoarDeck keeps a copy of the setup in two small files in `/scripts/` (`sd…a.cfg` and `sd…b.cfg`). If the SoarDeck setup is empty at startup, for example because the widget was removed and added again, the copy is restored and the screen shows **SETUP RESTORED FROM BACKUP** for two minutes. If a source is no longer in the model, it stays empty and the message is **SETUP RESTORED - CHECK SOURCES**. The copy belongs to the model, so a new, empty SoarDeck on a model that has used SoarDeck before gets the old setup back. Delete the two files to start from scratch. The message can be hidden by **TELEMETRY UNAVAILABLE** while the model is off, so check the sources in Configure.
 
 ## Flight log
 
